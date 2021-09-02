@@ -53,6 +53,7 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
     var bookQuery = new Parse.Query("books");
     bookQuery.limit(1000000); // Default is 100. We want all of them.
     bookQuery.containedIn("inCirculation", [true, undefined]);
+    bookQuery.containedIn("draft", [false, undefined]);
     bookQuery.select("langPointers");
     bookQuery
         .find()
@@ -462,6 +463,8 @@ Parse.Cloud.afterSave("downloadHistory", function (request) {
 // Return the books that should be shown in the default browse view.
 // Currently this is those in the Featured bookshelf, followed by all the others.
 // Each group is sorted alphabetically by title.
+// Todo: if we start using this again, we want additional filtering to remove
+// books where draft is true.
 Parse.Cloud.define("defaultBooks", function (request, response) {
     console.log("bloom-parse-server main.js define defaultBooks function");
     var first = request.params.first;
