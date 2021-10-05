@@ -386,8 +386,8 @@ Parse.Cloud.afterSave("books", function (request) {
         });
     });
 
+    // Send email if this book didn't exist before
     try {
-        //send email if this didn't exist before
         // this seemed to work locally, but not on the azure production server,
         // and has been the subject of many bug reports over the years
         //          objectExisted = request.object.existed();
@@ -413,7 +413,7 @@ Parse.Cloud.afterSave("books", function (request) {
             emailer
                 .sendBookSavedEmailAsync(book)
                 .then(function () {
-                    console.log("xBook saved email notice sent successfully.");
+                    console.log("Book saved email notice sent successfully.");
                 })
                 .catch(function (error) {
                     console.log(
@@ -421,7 +421,7 @@ Parse.Cloud.afterSave("books", function (request) {
                         error
                     );
                     // We leave it up to the code above that is actually doing the saving to declare
-                    // failure (response.error) or victory (response.success), we stay out of it.
+                    // failure (response.error) or victory (response.success). We stay out of it.
                 });
         }
     } catch (error) {
