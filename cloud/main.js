@@ -135,7 +135,7 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
                 } else {
                     request.log.error(
                         "updateLanguageRecords - Terminated unsuccessfully with error: " +
-                        error
+                            error
                     );
                 }
                 res.error(error);
@@ -174,7 +174,7 @@ Parse.Cloud.beforeSave("books", function (request, response) {
         else if (
             request.headers.referer &&
             request.headers.referer.indexOf("dashboard/apps/BloomLibrary.org") >
-            -1
+                -1
         ) {
             newUpdateSource = "parse dashboard";
         }
@@ -398,27 +398,27 @@ Parse.Cloud.afterSave("books", function (request) {
 
         console.log(
             "afterSave email handling request.object.existed():" +
-            request.object.existed()
+                request.object.existed()
         );
         console.log(
             "afterSave email handling createdAt:" +
-            createdAt +
-            " updatedAt:" +
-            updatedAt +
-            " objectExisted:" +
-            objectExisted
+                createdAt +
+                " updatedAt:" +
+                updatedAt +
+                " objectExisted:" +
+                objectExisted
         );
         if (!objectExisted) {
             var emailer = require("./emails.js");
             emailer
-                .sendBookSavedEmailAsync(book)
+                .sendEmailAboutNewBookAsync(book)
                 .then(function () {
                     console.log("Book saved email notice sent successfully.");
                 })
                 .catch(function (error) {
                     console.log(
                         "ERROR: 'Book saved but sending notice email failed: " +
-                        error
+                            error
                     );
                     // We leave it up to the code above that is actually doing the saving to declare
                     // failure (response.error) or victory (response.success). We stay out of it.

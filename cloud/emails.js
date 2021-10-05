@@ -65,7 +65,7 @@ Parse.Cloud.define("testBookSaved", function (request, response) {
     bookQuery.limit(1); //Note, the db we're testing on does need at least one book
     return bookQuery.find().then(function (books) {
         exports
-            .sendBookSavedEmailAsync(books[0])
+            .sendEmailAboutNewBookAsync(books[0])
             .then(function (result) {
                 console.log("test 'Announce Book Uploaded' completed.");
                 response.success(result);
@@ -93,9 +93,9 @@ Parse.Cloud.define("testBookSaved", function (request, response) {
 //         });
 // });
 
-// This email is sent when a book is uploaded or created.
+// Send an email to notify about a newly created book.
 // It is sent to an internal address, set by environment variable EMAIL_BOOK_EVENT_RECIPIENT on the server.
-exports.sendBookSavedEmailAsync = function (parseBook) {
+exports.sendEmailAboutNewBookAsync = function (parseBook) {
     var bookId = parseBook.id;
     var query = new Parse.Query("books");
     query.equalTo("objectId", bookId);
@@ -178,18 +178,15 @@ function sendEmailAboutBookAsync(
 }
 
 function getTemplateDataFromBookAsJson(bookJson) {
-    // Make sure we at least populate all the fields we want to send. Fill in with what we actually know.
-    var templateDataFromBookAsJson = {
-        title: "unknown title",
-        copyright: "unknown copyright",
-        license: "unknown license",
-    };
+    const templateDataFromBookAsJson = {};
 
-    // Could do Object.assign(templateDataFromBookAsJson, bookJson) but that gives extra properties we don't need to send
-    ["title", "copyright", "license"].forEach(function (property) {
-        // Without this if, it will remove any properties from templateDataFromBookAsJson which aren't in bookJson.
-        if (bookJson[property])
-            templateDataFromBookAsJson[property] = bookJson[property];
+    // Could do Object.assign(templateDataFromBookAsJson, bookJson) but that gives many extra properties
+    // we don't need/want to send. One could argue we should send them all so as to easily modify things
+    // from the template side. But I'm inclined to keep things clean for now. We don't expect the templates to change.
+    ["title", "copyright", "license"].forEach((property) => {
+        templateDataFromBookAsJson[property] = bookJson[property]
+            ? bookJson[property]
+            : `unknown ${property}`; // We want to explicitly report that the value is unknown.
     });
 
     templateDataFromBookAsJson["uploader"] = getBookUploader(bookJson);
