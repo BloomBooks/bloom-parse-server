@@ -132,10 +132,6 @@ Each is backed by a single mongodb at mongodb.com. This is how they were made:
 
        - Note: Don't leave off that /parse in the SERVER_URL!
 
-   - publicServerURL
-
-     - currently the same as SERVER_URL
-
    - MAILGUN_API_KEY
 
      - mailgun.com "Sending API key" with description "parse-server"
@@ -145,7 +141,12 @@ Each is backed by a single mongodb at mongodb.com. This is how they were made:
      - the email address to receive new book notifications
 
    - EMAIL_REPORT_BOOK_RECIPIENT
+
      - the email address to receive book concern reports from bloomlibrary.org users
+
+   - publicServerURL
+
+     - probably obsolete now that we don't use the built-in email feature; currently the same as SERVER_URL
 
 4. In the App Service's Deployment settings, add a slot for staging and point that staging app service at this github repository,
    with the appropriate branch. A few minutes later, parse-server will be running on the staging app service.

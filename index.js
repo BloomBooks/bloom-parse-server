@@ -2,7 +2,6 @@ var express = require("express");
 var ParseServer = require("parse-server").ParseServer;
 var path = require("path");
 var ParseDashboard = require("parse-dashboard");
-var SimpleSendGridAdapter = require("parse-server-sendgrid-adapter");
 var BloomFirebaseAuthAdapter = require("./bloomFirebaseAuthAdapter");
 
 var databaseUri = process.env.DATABASE_URI || process.env.MONGODB_URI;
@@ -20,26 +19,11 @@ var serverConfig = {
     masterKey: process.env.MASTER_KEY || "123",
     serverURL: serverUrl,
 
-    //password reset
-    emailAdapter: SimpleSendGridAdapter({
-        apiKey: process.env.SENDGRID_API_KEY || "dummyKey", // Note that SimpleSendGridAdapater at some point throws an exception if the key is empty string
-        fromAddress: "reset@bloomlibrary.org"
-    }),
-    publicServerURL:
-        process.env.publicServerURL || "http://localhost:1337/parse", // apparently used by password reset emailer
-    verifyUserEmails: true,
     appName: process.env.APP_NAME || "BloomLibrary.org",
-
-    //See IMPORTANT comment in public/choose-password.html
-    customPages: {
-        choosePassword:
-            getChoosePasswordUrl(serverUrl) ||
-            "http://localhost:1337/choose-password"
-    },
 
     auth: { bloom: BloomFirebaseAuthAdapter },
 
-    allowClientClassCreation: false
+    allowClientClassCreation: false,
 };
 var api = new ParseServer(serverConfig);
 // Client-keys like the javascript key or the .NET key are not necessary with parse-server
@@ -59,15 +43,15 @@ var dashboard = new ParseDashboard(
                 serverURL: serverConfig.serverURL,
                 masterKey: serverConfig.masterKey,
                 appName: serverConfig.appName,
-                production: serverConfig.serverURL.includes("production")
-            }
+                production: serverConfig.serverURL.includes("production"),
+            },
         ],
         users: [
             {
                 user: serverConfig.appId,
-                pass: serverConfig.masterKey
-            }
-        ]
+                pass: serverConfig.masterKey,
+            },
+        ],
     },
     { allowInsecureHTTP: allowInsecureHTTP }
 );
@@ -78,20 +62,10 @@ var app = express();
 var mountPath = process.env.PARSE_MOUNT || "/parse";
 app.use(mountPath, api);
 
-app.get("/choose-password", function(req, res) {
-    res.sendFile(path.join(__dirname, "/public/choose-password.html"));
-});
-
 app.use("/dashboard", dashboard);
 
 var port = process.env.PORT || 1337;
 var httpServer = require("http").createServer(app);
-httpServer.listen(port, function() {
+httpServer.listen(port, function () {
     console.log("bloom-parse-server running on port " + port + ".");
 });
-
-function getChoosePasswordUrl(serverUrl) {
-    var idx = serverUrl.indexOf("/parse");
-    if (idx >= 0) return serverUrl.substring(0, idx) + "/choose-password";
-    return serverUrl;
-}
