@@ -1,9 +1,8 @@
 // This cloud function is called by the BloomLibrary client page when
 // a user has filled out the form to report a concern about a book.
-// We use their address as the from (via sendgrid) and use their message
+// We use their address as the from (via email provider) and use their message
 // as part of the body. This goes into a template which adds other information
-// about the book. The email goes to our internal address for handling concerns,
-// set by an appsetting in azure.
+// about the book.
 
 // Sample CURL
 // curl -X POST -H "X-Parse-Application-Id: myAppId" -H "X-Parse-Master-Key: 123"
@@ -14,50 +13,72 @@
 // (this will often be the cloud servers where this is already set, but if you are running the parse server locally,
 // you need to set it to the email address to which you want to send the email.)
 
-Parse.Cloud.define("sendConcernEmail", function(request, response) {
-    var sendgridLibrary = require('sendgrid');
-    const helper = sendgridLibrary.mail;
-    const mail = new helper.Mail();
-    mail.setFrom(new helper.Email(request.params.fromAddress));
-    mail.setSubject('book concern'); // Will be replaced by template
-
-    const message = new helper.Content('text/plain', request.params.content);
-    mail.addContent(message);
-    mail.setTemplateId('5840534b-3c8c-4871-9f9a-c6d07fb52fae'); // Report a Book
-
+Parse.Cloud.define("sendConcernEmail", function (request, response) {
     var bookId = request.params.bookId;
-    var query = new Parse.Query('books');
-    query.equalTo('objectId', bookId);
-    query.include('uploader');
+    var query = new Parse.Query("books");
+    query.equalTo("objectId", bookId);
+    query.include("uploader");
     query.find({
-        success: function(results) {
-            exports.sendEmailAboutBookAsync(results[0], mail, process.env.EMAIL_REPORT_BOOK_RECIPIENT).then(function() {
-                console.log("Sent Concern Email Successfully.");
-                response.success("Success");
-            }).catch(function(error) {
-                console.log("Sending Concern Email Failed: " + error);
-                response.error("Sending Concern Email Failed: " + error);
-            });
+        success: function (results) {
+            const bookJson = results[0]._toFullJSON();
+            const dataForEmailClientJson = {
+                from: request.params.fromAddress,
+                to: process.env.EMAIL_REPORT_BOOK_RECIPIENT,
+                subject: `[BloomLibrary] Book reported - ${getBookTitle(
+                    bookJson
+                )}`,
+                template: "report-a-book",
+            };
+
+            sendEmailAboutBookAsync(dataForEmailClientJson, bookJson, {
+                body: request.params.content,
+            })
+                .then(function () {
+                    console.log("Sent Concern Email Successfully.");
+                    response.success("Success");
+                })
+                .catch(function (error) {
+                    console.log("Sending Concern Email Failed: " + error);
+                    response.error("Sending Concern Email Failed: " + error);
+                });
         },
-        error: function(error) {
-            console.log("Error looking up book in sendConcernEmail with objectId " + bookId + ": " + error);
-            response.error("Error looking up book in sendConcernEmail with objectId " + bookId + ": " + error);
-        }
+        error: function (error) {
+            console.log(
+                "Error looking up book in sendConcernEmail with objectId " +
+                    bookId +
+                    ": " +
+                    error
+            );
+            response.error(
+                "Error looking up book in sendConcernEmail with objectId " +
+                    bookId +
+                    ": " +
+                    error
+            );
+        },
     });
 });
-Parse.Cloud.define("testBookSaved", function(request, response) {
-    var bookQuery = new Parse.Query('books');
-    bookQuery.include('uploader');
+
+Parse.Cloud.define("testBookSaved", function (request, response) {
+    var bookQuery = new Parse.Query("books");
+    bookQuery.include("uploader");
     bookQuery.limit(1); //Note, the db we're testing on does need at least one book
     return bookQuery.find().then(function (books) {
-        exports.sendBookSavedEmailAsync(books[0]).then(function(result) {
-            console.log("Sendgrid 'Announce Book Uploaded' completed.");
-            response.success(result);
-            }).catch(function(error) {
-                console.log("ERROR: Sendgrid 'Announce Book Uploaded' failed: " + error);
-                response.error("ERROR: Sendgrid 'Announce Book Uploaded' failed: " + error);
+        exports
+            .sendEmailAboutNewBookAsync(books[0])
+            .then(function (result) {
+                console.log("test 'Announce Book Uploaded' completed.");
+                response.success(result);
+            })
+            .catch(function (error) {
+                console.log(
+                    "ERROR: test 'Announce Book Uploaded' failed: " + error
+                );
+                response.error(
+                    "ERROR: test 'Announce Book Uploaded' failed: " + error
+                );
             });
-        });
+    });
 });
 
 // Parse.Cloud.define("SendEmailOfBooksNewInLast24Hours", function(request, response) {
@@ -72,85 +93,126 @@ Parse.Cloud.define("testBookSaved", function(request, response) {
 //         });
 // });
 
-// This email is sent when a book is uploaded or created.
-// It is sent to an internal address, set by an appsetting in azure.
-exports.sendBookSavedEmailAsync = function(parseBook) {
+// Send an email to notify about a newly created book.
+// It is sent to an internal address, set by environment variable EMAIL_BOOK_EVENT_RECIPIENT on the server.
+exports.sendEmailAboutNewBookAsync = function (parseBook) {
+    var bookId = parseBook.id;
+    var query = new Parse.Query("books");
+    query.equalTo("objectId", bookId);
+    query.include("uploader");
+    return query.find({
+        success: function (results) {
+            const bookJson = results[0]._toFullJSON();
+            sendEmailAboutBookAsync(
+                {
+                    from: "Bloom Bot <bot@bloomlibrary.org>",
+                    to: process.env.EMAIL_BOOK_EVENT_RECIPIENT,
+                    subject: `[BloomLibrary] ${getBookUploader(
+                        bookJson
+                    )} added ${getBookTitle(bookJson)}`,
+                    template: "announce-book-uploaded",
+                },
+                bookJson
+            );
+        },
+    });
+};
 
-    //TODO need to actually re-query in order to get the uploader because that's not a simple string field
-
-    var sendgridLibrary = require('sendgrid');
-    const helper = sendgridLibrary.mail;
-    const mail = new helper.Mail();
-    mail.setFrom(new helper.Email('bot@bloomlibrary.org', 'Bloom Bot'));
-    mail.setSubject('book saved'); // Will be replaced by template
-    mail.setTemplateId('cdfea777-a9d7-49bc-8fd4-26c49b773b13'); // Announce Book Uploaded
-    return exports.sendEmailAboutBookAsync(parseBook, mail, process.env.EMAIL_BOOK_EVENT_RECIPIENT);
-}
-
-// Caller should have already filled in the from, subject, and (optionally) content.
-// This adds metadata about the book and sends off the email.
-// book should be a parse-server object (not just json).
-exports.sendEmailAboutBookAsync = function(parseBook, sendGridMail, toAddress) {
-    return new Promise(function(resolve, reject) {
-        try{
+// This adds metadata about the book (such as title, etc.) and sends off the email.
+// Any data beyond what can be determined from the book itself
+// should be passed via additionalJsonForTemplate.
+// parseBook should be a parse-server object (not just json).
+function sendEmailAboutBookAsync(
+    dataForEmailClientJson,
+    parseBook,
+    additionalJsonForEmailTemplate
+) {
+    return new Promise(function (resolve, reject) {
+        try {
             // on the unit test server, we don't want to be sending emails, so we just don't set the needed environment variables.
-            if(process.env.SENDGRID_API_KEY === undefined || process.env.SENDGRID_API_KEY.length == 0) {
-                console.log("SENDGRID_API_KEY environment variable not set, sendEmailAboutBookAsync() will just pretend it succeeded.");
-                resolve("SENDGRID_API_KEY environment variable not set");
+            if (!process.env.MAILGUN_API_KEY) {
+                console.log(
+                    "MAILGUN_API_KEY environment variable not set, sendEmailAboutBookAsync() will just pretend it succeeded."
+                );
+                resolve("MAILGUN_API_KEY environment variable not set");
             }
-            if(toAddress === undefined || toAddress.length == 0) {
-                console.log("toAddress not set, sendEmailAboutBookAsync() will just pretend it succeeded.");
-                resolve("toAddress variable not set (check environment variable)");
-            }
-            var sendgridLibrary = require('sendgrid');
-            const helper = sendgridLibrary.mail;
-
-            //provide the parameters for the template
-            var sourceJsonBook = parseBook._toFullJSON();
-            // Make sure we at least populate all the fields we want to send. Fill in with what we actually know.
-            var cleanedJsonBook = {'title':'unknown title', 'copyright':'unknown copyright','license':'unknown license',objectId:'unknownBookId'};
-            Object.assign(/*target=*/cleanedJsonBook, /*source=*/sourceJsonBook);
-
-            // fish just the username out of the uploader
-            if (sourceJsonBook.uploader && sourceJsonBook.uploader.username) {
-                cleanedJsonBook['uploader'] = sourceJsonBook.uploader.username;
-            } else {
-                // if you're getting this, make sure the query that got the book
-                // did an "include('uploader')" so that it is part of the object
-                cleanedJsonBook['uploader'] = 'unknown uploader';
+            if (!dataForEmailClientJson.to) {
+                console.log(
+                    "to email address not set, sendEmailAboutBookAsync() will just pretend it succeeded."
+                );
+                resolve(
+                    "to email address variable not set (check environment variable)"
+                );
             }
 
-            const personalization = new helper.Personalization();
-            personalization.addTo(new helper.Email(toAddress)); // this is how you set the "to" address.
-            personalization.addSubstitution(new helper.Substitution(':url', getBookUrl(cleanedJsonBook)));
-            ['title','uploader','copyright','license'].forEach(function(property) {
-                personalization.addSubstitution(new helper.Substitution(':'+property, cleanedJsonBook[property]));
-            }, this);
-            sendGridMail.addPersonalization(personalization);
+            const bookJson = getTemplateDataFromBookAsJson(parseBook);
+            const templateJson = {
+                ...bookJson,
+                ...additionalJsonForEmailTemplate,
+            };
 
-            const sendGridInstance = sendgridLibrary(process.env.SENDGRID_API_KEY);
-            const request = sendGridInstance.emptyRequest({
-                method: 'POST',
-                path: '/v3/mail/send',
-                body: sendGridMail.toJSON()
+            const data = {
+                "h:X-Mailgun-Variables": JSON.stringify(templateJson),
+            };
+            Object.assign(/*target=*/ data, /*source=*/ dataForEmailClientJson);
+
+            const mailgun = require("mailgun-js");
+            const mg = mailgun({
+                apiKey: process.env.MAILGUN_API_KEY,
+                domain: "bloomlibrary.org",
             });
-            console.log("Will be sending to SendGrid: "+JSON.stringify(request));
-
-            sendGridInstance.API(request, function(error, response) {
+            mg.messages().send(data, function (error, body) {
                 if (error) {
-                    console.log('Sendgrid emptyRequest returned error: ' + error.toJSON);
-                    console.log(JSON.stringify(response));
-                    reject('Sendgrid emptyRequest returned error: ' + JSON.stringify(response));
-                } else {
-                    resolve("Success");
+                    console.error("error:");
+                    console.error(error);
+                    console.error("body:");
+                    console.error(body);
                 }
             });
-        } catch(exception) {
+
+            resolve();
+        } catch (exception) {
             reject(exception);
         }
     });
 }
 
-function getBookUrl(book) {
-    return "http://www.bloomlibrary.org/browse/detail/" + book.objectId;
+function getTemplateDataFromBookAsJson(bookJson) {
+    const templateDataFromBookAsJson = {};
+
+    // Could do Object.assign(templateDataFromBookAsJson, bookJson) but that gives many extra properties
+    // we don't need/want to send. One could argue we should send them all so as to easily modify things
+    // from the template side. But I'm inclined to keep things clean for now. We don't expect the templates to change.
+    ["title", "copyright", "license"].forEach((property) => {
+        templateDataFromBookAsJson[property] = bookJson[property]
+            ? bookJson[property]
+            : `unknown ${property}`; // We want to explicitly report that the value is unknown.
+    });
+
+    templateDataFromBookAsJson["uploader"] = getBookUploader(bookJson);
+    templateDataFromBookAsJson["url"] = getBookUrl(bookJson);
+
+    return templateDataFromBookAsJson;
+}
+
+function getBookUrl(bookJson) {
+    return "https://bloomlibrary.org/book/" + bookJson.objectId;
+}
+
+function getBookUploader(bookJson) {
+    if (bookJson && bookJson.uploader && bookJson.uploader.username) {
+        return bookJson.uploader.username;
+    } else {
+        // if you're getting this, make sure the query that got the book
+        // did an "include('uploader')" so that it is part of the object
+        return "unknown uploader";
+    }
+}
+
+function getBookTitle(bookJson) {
+    if (bookJson && bookJson.title) {
+        return bookJson.title;
+    } else {
+        return "unknown title";
+    }
 }
