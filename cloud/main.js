@@ -1,5 +1,6 @@
 /* eslint-disable no-undef */
 require("./emails.js"); // allows email-specific could functions to be defined
+var Config = require('parse-server/lib/Config');
 
 // This function will call save on every book. This is useful for
 // applying the functionality in beforeSaveBook to every book,
@@ -596,6 +597,9 @@ Parse.Cloud.define("defaultBooks", function (request, response) {
 // NOTE: There is reason to believe that using this function to add columns of type Object does not work
 // and that they must be added manually (in the dashboard) instead.
 Parse.Cloud.define("setupTables", function (request, response) {
+    const config = new Config("BloomLibrary.org", "/parse");
+    const schema = await config.database.loadSchema();
+
     // Required BloomLibrary classes/fields
     // Note: code below currently requires that 'books' is first.
     // Current code supports only String, Boolean, Number, Date, Array, Pointer<_User/Book/appDetailsInLanguage>,
@@ -775,6 +779,34 @@ Parse.Cloud.define("setupTables", function (request, response) {
                 { name: "index", type: "Integer" },
             ],
         },
+        {
+            // BL-10678 Add API key to OPDS
+            name: "apiAccount",
+            classLevelPermissions: {
+                // nb I don't really know if 'role:catalog-service' needs get or find
+                get: { 'role:admin': true,'role:catalog-service':true },
+                find: { 'role:admin': true, 'role:catalog-service':true },
+                create: { 'role:admin': true },
+                update: { 'role:admin': true },
+                delete: { 'role:admin': true },
+            },
+            fields: [
+                { name: "user", type: "Pointer<_User>" },  // REVIEW: what's the difference between Pointer and Relation?
+                { name: "referrerTag", type: "String" }, // use with analytics
+                { name:  "embargoDays", type: "Number" },
+                // maybe in future: { name: "expireDate", type: "Date" }, // when they'll need to get a new API
+            ],
+
+            // TODO: can/should we automate the other required stuff for the OPDS catalog API?
+            // * add user "unit-test@example.com" with a known password from environment variable
+            // * add apiAccount "unit-test@example.com", referrerTag "unit-test-account", leave embargoDays undefined.
+            // * add user "catalog-service" with a known password from environment variable
+            // * add role "catalog-service" with ACL public read (or maybe not even that?)
+            // * give the "catalog-service" user to the "catalog-service" the role
+            // * (unclear?) tell the apiAccount that it is readable by things with "catalog-service" role
+
+            // TODO does apiAccount need to have public read permissions?
+        },
     ];
 
     var ic = 0;
@@ -787,6 +819,7 @@ Parse.Cloud.define("setupTables", function (request, response) {
 
     var doOne = function () {
         var className = classes[ic].name;
+        var classLevelPermissions = classes[ic].classLevelPermissions;
         var parseClass = Parse.Object.extend(className);
         var instance = new parseClass();
         var fields = classes[ic].fields;
@@ -832,6 +865,8 @@ Parse.Cloud.define("setupTables", function (request, response) {
                 //     break;
             }
         }
+
+        // Review: since we're just making this as a way of changing the schema, shouldn't we be deleting it afterwards?
         instance.save(null, {
             useMasterKey: true,
             success: function (newObj) {
@@ -856,7 +891,13 @@ Parse.Cloud.define("setupTables", function (request, response) {
                 response.error("instance.save failed: " + error);
             },
         });
+
+        if(classLevelPermissions){
+            // useMasterKey ??
+            await schema.setPermissions(className, classLevelPermissions);
+        }
     };
+
     var deleteOne = function () {
         // Now we're done, the class and fields must exist; we don't actually want the instances
         var newObj = classes[ic].parseObject;
