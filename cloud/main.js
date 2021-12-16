@@ -48,26 +48,36 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
 
     var langCounts = {};
     var languagesToDelete = new Array();
+    var languageIdsUsedByUncountedBooks = new Set();
 
     //Make and execute book query
     var bookQuery = new Parse.Query("books");
     bookQuery.limit(1000000); // Default is 100. We want all of them.
-    bookQuery.containedIn("inCirculation", [true, undefined]);
-    bookQuery.containedIn("draft", [false, undefined]);
-    bookQuery.select("langPointers");
+    bookQuery.select("langPointers", "inCirculation", "draft");
     bookQuery
         .find()
         .then((books) => {
             books.forEach((book) => {
-                //Spin through each book's languages and increment usage count
-                var langPtrs = book.get("langPointers");
-                if (langPtrs) {
-                    langPtrs.forEach((langPtr) => {
+                const { langPointers, inCirculation, draft } = book.attributes;
+                if (langPointers) {
+                    //Spin through each book's languages and increment usage count
+                    langPointers.forEach((langPtr) => {
                         var id = langPtr.id;
                         if (!(id in langCounts)) {
                             langCounts[id] = 0;
                         }
-                        langCounts[id]++;
+
+                        // We don't want out-of-circulation or draft books to
+                        // count toward our usage number, but we must not delete
+                        // a language record that is used by a book, even if all
+                        // the books that use it are drafts or out of circulation.
+                        // So we keep track of possible such languages to prevent
+                        // deleting them below.
+                        if (inCirculation === false || draft === true) {
+                            languageIdsUsedByUncountedBooks.add(id);
+                        } else {
+                            langCounts[id]++;
+                        }
                     });
                 }
             });
@@ -80,7 +90,11 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
             languagesToUpdate.forEach((language) => {
                 var newUsageCount = langCounts[language.id] || 0;
                 language.set("usageCount", newUsageCount);
-                if (newUsageCount === 0) {
+
+                if (
+                    newUsageCount === 0 &&
+                    !languageIdsUsedByUncountedBooks.has(language.id)
+                ) {
                     languagesToDelete.push(language);
                 }
             });
