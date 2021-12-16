@@ -48,26 +48,37 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
 
     var langCounts = {};
     var languagesToDelete = new Array();
+    var languageIdsToPreserve = new Set();
 
     //Make and execute book query
     var bookQuery = new Parse.Query("books");
     bookQuery.limit(1000000); // Default is 100. We want all of them.
-    bookQuery.containedIn("inCirculation", [true, undefined]);
-    bookQuery.containedIn("draft", [false, undefined]);
-    bookQuery.select("langPointers");
+    bookQuery.select("langPointers", "inCirculation", "draft");
     bookQuery
         .find()
         .then((books) => {
             books.forEach((book) => {
-                //Spin through each book's languages and increment usage count
-                var langPtrs = book.get("langPointers");
-                if (langPtrs) {
-                    langPtrs.forEach((langPtr) => {
+                const { langPointers, inCirculation, draft } = book.attributes;
+                if (langPointers) {
+                    //Spin through each book's languages and increment usage count
+
+                    let preserveButDontCountLanguage = false;
+                    if (inCirculation === false || draft === true) {
+                        preserveButDontCountLanguage = true;
+                    }
+
+                    langPointers.forEach((langPtr) => {
                         var id = langPtr.id;
+
                         if (!(id in langCounts)) {
                             langCounts[id] = 0;
                         }
-                        langCounts[id]++;
+
+                        if (preserveButDontCountLanguage) {
+                            languageIdsToPreserve.add(id);
+                        } else {
+                            langCounts[id]++;
+                        }
                     });
                 }
             });
@@ -80,7 +91,11 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
             languagesToUpdate.forEach((language) => {
                 var newUsageCount = langCounts[language.id] || 0;
                 language.set("usageCount", newUsageCount);
-                if (newUsageCount === 0) {
+
+                if (
+                    newUsageCount === 0 &&
+                    !languageIdsToPreserve.has(language.id)
+                ) {
                     languagesToDelete.push(language);
                 }
             });
