@@ -7,115 +7,64 @@
 // Sample CURL
 // curl -X POST -H "X-Parse-Application-Id: myAppId" -H "X-Parse-Master-Key: 123"
 //  -d "message='i am concerned'&bookId='123'&bookTitle='flowers for foobar'"
-//  http://localhost:1337/parse/functions/testBookSaved
+//  http://localhost:1337/parse/functions/sendConcernEmail
 
 // NOTE: the environment variable EMAIL_REPORT_BOOK_RECIPIENT must be set on the machine hosting the parse server.
 // (this will often be the cloud servers where this is already set, but if you are running the parse server locally,
 // you need to set it to the email address to which you want to send the email.)
 
-Parse.Cloud.define("sendConcernEmail", function (request, response) {
+Parse.Cloud.define("sendConcernEmail", async (request) => {
     var bookId = request.params.bookId;
     var query = new Parse.Query("books");
     query.equalTo("objectId", bookId);
     query.include("uploader");
-    query.find({
-        success: function (results) {
-            const bookJson = results[0]._toFullJSON();
-            const dataForEmailClientJson = {
-                from: request.params.fromAddress,
-                to: process.env.EMAIL_REPORT_BOOK_RECIPIENT,
-                subject: `[BloomLibrary] Book reported - ${getBookTitle(
-                    bookJson
-                )}`,
-                template: "report-a-book",
-            };
+    const results = await query.find();
+    const bookJson = results[0]._toFullJSON();
+    const dataForEmailClientJson = {
+        from: request.params.fromAddress,
+        to: process.env.EMAIL_REPORT_BOOK_RECIPIENT,
+        subject: `[BloomLibrary] Book reported - ${getBookTitle(bookJson)}`,
+        template: "report-a-book",
+    };
 
-            sendEmailAboutBookAsync(dataForEmailClientJson, bookJson, {
-                body: request.params.content,
-            })
-                .then(function () {
-                    console.log("Sent Concern Email Successfully.");
-                    response.success("Success");
-                })
-                .catch(function (error) {
-                    console.log("Sending Concern Email Failed: " + error);
-                    response.error("Sending Concern Email Failed: " + error);
-                });
-        },
-        error: function (error) {
-            console.log(
-                "Error looking up book in sendConcernEmail with objectId " +
-                    bookId +
-                    ": " +
-                    error
-            );
-            response.error(
-                "Error looking up book in sendConcernEmail with objectId " +
-                    bookId +
-                    ": " +
-                    error
-            );
-        },
+    await sendEmailAboutBookAsync(dataForEmailClientJson, bookJson, {
+        body: request.params.content,
     });
+
+    console.log("Sent Concern Email Successfully.");
+    return "Success";
 });
 
-Parse.Cloud.define("testBookSaved", function (request, response) {
+Parse.Cloud.define("testBookSaved", async () => {
     var bookQuery = new Parse.Query("books");
     bookQuery.include("uploader");
     bookQuery.limit(1); //Note, the db we're testing on does need at least one book
-    return bookQuery.find().then(function (books) {
-        exports
-            .sendEmailAboutNewBookAsync(books[0])
-            .then(function (result) {
-                console.log("test 'Announce Book Uploaded' completed.");
-                response.success(result);
-            })
-            .catch(function (error) {
-                console.log(
-                    "ERROR: test 'Announce Book Uploaded' failed: " + error
-                );
-                response.error(
-                    "ERROR: test 'Announce Book Uploaded' failed: " + error
-                );
-            });
-    });
+    const books = await bookQuery.find();
+    const result = await exports.sendEmailAboutNewBookAsync(books[0]);
+    console.log("test 'Announce Book Uploaded' completed.");
+    return result;
 });
-
-// Parse.Cloud.define("SendEmailOfBooksNewInLast24Hours", function(request, response) {
-//     var bookQuery = new Parse.Query('books');
-//     bookQuery.include('uploader');
-//     var aDayAgo = new Date(new Date().getTime() - (24 * 60 * 60 * 1000));
-
-//     bookQuery.greaterThanOrEqualTo("createdAt", sinceThen);
-
-//     return bookQuery.find().then(function (books) {
-//          TODO create a since body for the email out of all the books
-//         });
-// });
 
 // Send an email to notify about a newly created book.
 // It is sent to an internal address, set by environment variable EMAIL_BOOK_EVENT_RECIPIENT on the server.
-exports.sendEmailAboutNewBookAsync = function (parseBook) {
+exports.sendEmailAboutNewBookAsync = async (parseBook) => {
     var bookId = parseBook.id;
     var query = new Parse.Query("books");
     query.equalTo("objectId", bookId);
     query.include("uploader");
-    return query.find({
-        success: function (results) {
-            const bookJson = results[0]._toFullJSON();
-            sendEmailAboutBookAsync(
-                {
-                    from: "Bloom Bot <bot@bloomlibrary.org>",
-                    to: process.env.EMAIL_BOOK_EVENT_RECIPIENT,
-                    subject: `[BloomLibrary] ${getBookUploader(
-                        bookJson
-                    )} added ${getBookTitle(bookJson)}`,
-                    template: "announce-book-uploaded",
-                },
+    const results = await query.find();
+    const bookJson = results[0]._toFullJSON();
+    await sendEmailAboutBookAsync(
+        {
+            from: "Bloom Bot <bot@bloomlibrary.org>",
+            to: process.env.EMAIL_BOOK_EVENT_RECIPIENT,
+            subject: `[BloomLibrary] ${getBookUploader(
                 bookJson
-            );
+            )} added ${getBookTitle(bookJson)}`,
+            template: "announce-book-uploaded",
         },
-    });
+        bookJson
+    );
 };
 
 // This adds metadata about the book (such as title, etc.) and sends off the email.
