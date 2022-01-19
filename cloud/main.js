@@ -4,36 +4,20 @@ require("./emails.js"); // allows email-specific could functions to be defined
 // This function will call save on every book. This is useful for
 // applying the functionality in beforeSaveBook to every book,
 // particularly updating the tags and search fields.
-Parse.Cloud.define("saveAllBooks", function (request, res) {
+Parse.Cloud.define("saveAllBooks", async (request) => {
     request.log.info("saveAllBooks - Starting.");
     // Query for all books
     var query = new Parse.Query("books");
     query.select("objectId");
-    query
-        .each(function (book) {
-            book.set("updateSource", "saveAllBooks"); // very important so we don't add system:incoming tag
-            return book.save(null, { useMasterKey: true }).then(
-                function () {},
-                function (error) {
-                    request.log.error(
-                        "saveAllBooks - book.save failed: " + error
-                    );
-                }
-            );
-        })
-        .then(
-            function () {
-                request.log.info("saveAllBooks - Completed successfully.");
-                res.success();
-            },
-            function (error) {
-                // Set the job's error status
-                request.log.error(
-                    "saveAllBooks - Terminated with error: " + error
-                );
-                res.error(error);
-            }
-        );
+    await query.each((book) => {
+        book.set("updateSource", "saveAllBooks"); // very important so we don't add system:incoming tag
+        try {
+            return book.save(null, { useMasterKey: true });
+        } catch (error) {
+            request.log.error("saveAllBooks - book.save failed: " + error);
+        }
+    });
+    request.log.info("saveAllBooks - Completed successfully.");
 });
 
 // A background job to populate usageCounts for languages.
@@ -43,122 +27,117 @@ Parse.Cloud.define("saveAllBooks", function (request, res) {
 // This is scheduled on Azure under bloom-library-maintenance-{prod|dev}-daily.
 // You can also run it manually via REST:
 // curl -X POST -H "X-Parse-Application-Id: <app ID>" -H "X-Parse-Master-Key: <master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/updateLanguageRecords
-Parse.Cloud.job("updateLanguageRecords", (request, res) => {
+Parse.Cloud.job("updateLanguageRecords", async (request) => {
     request.log.info("updateLanguageRecords - Starting.");
 
-    var langCounts = {};
-    var languagesToDelete = new Array();
-    var languageIdsUsedByUncountedBooks = new Set();
+    const langCounts = {};
+    const languagesToDelete = new Array();
+    const languageIdsUsedByUncountedBooks = new Set();
 
     //Make and execute book query
-    var bookQuery = new Parse.Query("books");
+    const bookQuery = new Parse.Query("books");
     bookQuery.limit(1000000); // Default is 100. We want all of them.
     bookQuery.select("langPointers", "inCirculation", "draft");
-    bookQuery
-        .find()
-        .then((books) => {
-            books.forEach((book) => {
-                const { langPointers, inCirculation, draft } = book.attributes;
-                if (langPointers) {
-                    //Spin through each book's languages and increment usage count
-                    langPointers.forEach((langPtr) => {
-                        var id = langPtr.id;
-                        if (!(id in langCounts)) {
-                            langCounts[id] = 0;
-                        }
-
-                        // We don't want out-of-circulation or draft books to
-                        // count toward our usage number, but we must not delete
-                        // a language record that is used by a book, even if all
-                        // the books that use it are drafts or out of circulation.
-                        // So we keep track of possible such languages to prevent
-                        // deleting them below.
-                        if (inCirculation === false || draft === true) {
-                            languageIdsUsedByUncountedBooks.add(id);
-                        } else {
-                            langCounts[id]++;
-                        }
-                    });
+    const books = await bookQuery.find();
+    books.forEach((book) => {
+        const { langPointers, inCirculation, draft } = book.attributes;
+        if (langPointers) {
+            //Spin through each book's languages and increment usage count
+            langPointers.forEach((langPtr) => {
+                const id = langPtr.id;
+                if (!(id in langCounts)) {
+                    langCounts[id] = 0;
                 }
-            });
 
-            var langQuery = new Parse.Query("language");
-            langQuery.limit(1000000); // Default is 100. We want all of them.
-            return langQuery.find();
-        })
-        .then((languagesToUpdate) => {
-            languagesToUpdate.forEach((language) => {
-                var newUsageCount = langCounts[language.id] || 0;
-                language.set("usageCount", newUsageCount);
-
-                if (
-                    newUsageCount === 0 &&
-                    !languageIdsUsedByUncountedBooks.has(language.id)
-                ) {
-                    languagesToDelete.push(language);
-                }
-            });
-
-            // In theory, we could remove items in languagesToDelete from languagesToUpdate.
-            // But there will be so few of them, it doesn't seem worth it.
-
-            return Parse.Object.saveAll(languagesToUpdate, {
-                useMasterKey: true,
-                success: (successfulUpdates) => {
-                    request.log.info(
-                        `updateLanguageRecords - Updated usageCount for ${successfulUpdates.length} languages.`
-                    );
-                },
-                // Let any errors bubble up.
-            });
-        })
-        .then(() => {
-            if (languagesToDelete.length === 0) return Parse.Promise.as();
-
-            return Parse.Object.destroyAll(languagesToDelete, {
-                useMasterKey: true,
-                success: (successfulDeletes) => {
-                    request.log.info(
-                        `updateLanguageRecords - Deleted ${
-                            successfulDeletes.length
-                        } languages which had no books: ${successfulDeletes.map(
-                            (l) => l.get("isoCode")
-                        )}`
-                    );
-                },
-                // Let any errors bubble up.
-            });
-        })
-        .then(
-            () => {
-                request.log.info(
-                    "updateLanguageRecords - Completed successfully."
-                );
-                res.success();
-            },
-            (error) => {
-                if (error.code === Parse.Error.AGGREGATE_ERROR) {
-                    error.errors.forEach((iError) => {
-                        request.log.error(
-                            `Couldn't process ${iError.object.id} due to ${iError.message}`
-                        );
-                    });
-                    request.log.error(
-                        "updateLanguageRecords - Terminated unsuccessfully."
-                    );
+                // We don't want out-of-circulation or draft books to
+                // count toward our usage number, but we must not delete
+                // a language record that is used by a book, even if all
+                // the books that use it are drafts or out of circulation.
+                // So we keep track of possible such languages to prevent
+                // deleting them below.
+                if (inCirculation === false || draft === true) {
+                    languageIdsUsedByUncountedBooks.add(id);
                 } else {
-                    request.log.error(
-                        "updateLanguageRecords - Terminated unsuccessfully with error: " +
-                            error
-                    );
+                    langCounts[id]++;
                 }
-                res.error(error);
+            });
+        }
+    });
+
+    const langQuery = new Parse.Query("language");
+    langQuery.limit(1000000); // Default is 100. We want all of them.
+    const languagesToUpdate = await langQuery.find();
+    languagesToUpdate.forEach((language) => {
+        const newUsageCount = langCounts[language.id] || 0;
+        language.set("usageCount", newUsageCount);
+
+        if (
+            newUsageCount === 0 &&
+            !languageIdsUsedByUncountedBooks.has(language.id)
+        ) {
+            languagesToDelete.push(language);
+        }
+    });
+
+    // In theory, we could remove items in languagesToDelete from languagesToUpdate.
+    // But there will be so few of them, it doesn't seem worth it.
+
+    try {
+        const successfulUpdates = await Parse.Object.saveAll(
+            languagesToUpdate,
+            {
+                useMasterKey: true,
             }
         );
+        request.log.info(
+            `updateLanguageRecords - Updated usageCount for ${successfulUpdates.length} languages.`
+        );
+
+        if (languagesToDelete.length === 0) {
+            request.log.info("updateLanguageRecords - Completed successfully.");
+            request.message("Completed successfully.");
+            return Promise.resolve();
+        }
+
+        const successfulDeletes = await Parse.Object.destroyAll(
+            languagesToDelete,
+            {
+                useMasterKey: true,
+            }
+        );
+        request.log.info(
+            `updateLanguageRecords - Deleted ${
+                successfulDeletes.length
+            } languages which had no books: ${successfulDeletes.map((l) =>
+                l.get("isoCode")
+            )}`
+        );
+    } catch (error) {
+        if (error.code === Parse.Error.AGGREGATE_ERROR) {
+            error.errors.forEach((iError) => {
+                request.log.error(
+                    `Couldn't process ${iError.object.id} due to ${iError.message}`
+                );
+            });
+            request.log.error(
+                "updateLanguageRecords - Terminated unsuccessfully."
+            );
+            throw new Error("Terminated unsuccessfully.");
+        } else {
+            request.log.error(
+                "updateLanguageRecords - Terminated unsuccessfully with error: " +
+                    error
+            );
+            throw new Error("Terminated unsuccessfully with error: " + error);
+        }
+    }
+
+    request.log.info("updateLanguageRecords - Completed successfully.");
+    request.message("Completed successfully.");
 });
 
 // Makes new and updated books have the right search string and ACL.
-Parse.Cloud.beforeSave("books", function (request, response) {
+Parse.Cloud.beforeSave("books", function (request) {
     const book = request.object;
 
     console.log("entering bloom-parse-server main.js beforeSave books");
@@ -327,77 +306,35 @@ Parse.Cloud.beforeSave("books", function (request, response) {
         newACL.setWriteAccess(creator, true);
         request.object.setACL(newACL);
     }
-    response.success();
 });
 
-Parse.Cloud.afterSave("books", function (request) {
+Parse.Cloud.afterSave("books", async (request) => {
     // We no longer wish to automatically create bookshelves.
     // It is too easy for a user (or even us mistakenly) to create them.
-    // const bookshelfPrefix = "bookshelf:";
-    var book = request.object;
-    // book.get("tags")
-    //     .filter(function(element) {
-    //         return element.indexOf(bookshelfPrefix) > -1;
-    //     })
-    //     .map(function(element) {
-    //         return element.substr(bookshelfPrefix.length);
-    //     })
-    //     .forEach(function(key) {
-    //         var Bookshelf = Parse.Object.extend("bookshelf");
-    //         var query = new Parse.Query(Bookshelf);
-    //         query.equalTo("key", key);
-    //         query.count({
-    //             success: function(count) {
-    //                 if (count == 0) {
-    //                     //Create a new bookshelf to contain this book with default properties
-    //                     var bookshelf = new Bookshelf();
-    //                     bookshelf.set("key", key);
-    //                     bookshelf.set("englishName", key);
-    //                     bookshelf.set("normallyVisible", false);
-    //                     bookshelf.save(null, { useMasterKey: true }).then(
-    //                         function() {},
-    //                         function(error) {
-    //                             console.log("bookshelf.save failed: " + error);
-    //                             response.error(
-    //                                 "bookshelf.save failed: " + error
-    //                             );
-    //                         }
-    //                     );
-    //                 }
-    //             },
-    //             error: function(error) {
-    //                 console.log("get error: " + error);
-    //             }
-    //         });
-    //     });
 
     // Now that we have saved the book, see if there are any new tags we need to create in the tag table.
+    var book = request.object;
     var Tag = Parse.Object.extend("tag");
-    book.get("tags").forEach(function (name) {
-        var query = new Parse.Query(Tag);
+    book.get("tags").forEach(async (name) => {
+        const query = new Parse.Query(Tag);
         query.equalTo("name", name);
-        query.count({
-            success: function (count) {
-                if (count == 0) {
-                    // We have a tag on this book which doesn't exist in the tag table. Create it.
-                    var tag = new Tag();
-                    tag.set("name", name);
-                    tag.save(null, { useMasterKey: true }).then(
-                        function () {
-                            // Success. Nothing else to do.
-                        },
-                        function (error) {
-                            console.log("tag.save failed: " + error);
-                            request.log.error("tag.save failed: " + error);
-                        }
-                    );
-                }
-            },
-            error: function (error) {
-                console.log("unable to get tags: " + error);
-                request.log.error("unable to get tags: " + error);
-            },
-        });
+
+        try {
+            const count = await query.count();
+            if (count == 0) {
+                // We have a tag on this book which doesn't exist in the tag table. Create it.
+                var tag = new Tag();
+                tag.set("name", name);
+                await tag.save(null, { useMasterKey: true });
+            }
+        } catch (error) {
+            // I'm not sure it is the right thing to do, but these errors
+            // were getting ignored previously, so when I refactored the code,
+            // I made it do the same.
+            request.log.error(
+                "afterSave - books, tag processing failed: " + error
+            );
+        }
     });
 
     // Send email if this book didn't exist before
@@ -424,168 +361,14 @@ Parse.Cloud.afterSave("books", function (request) {
         );
         if (!objectExisted) {
             var emailer = require("./emails.js");
-            emailer
-                .sendEmailAboutNewBookAsync(book)
-                .then(function () {
-                    console.log("Book saved email notice sent successfully.");
-                })
-                .catch(function (error) {
-                    console.log(
-                        "ERROR: 'Book saved but sending notice email failed: " +
-                            error
-                    );
-                    // We leave it up to the code above that is actually doing the saving to declare
-                    // failure (response.error) or victory (response.success). We stay out of it.
-                });
+            await emailer.sendEmailAboutNewBookAsync(book);
+            request.log.info("Book saved email notice sent successfully.");
         }
     } catch (error) {
-        console.log("aftersave email handling error: " + error);
+        request.log.error(
+            "ERROR: Book saved but sending notice email failed: " + error
+        );
     }
-});
-
-Parse.Cloud.afterSave("downloadHistory", function (request) {
-    //Parse.Cloud.useMasterKey();
-    console.log(
-        "entering bloom-parse-server main.js afterSave downloadHistory"
-    );
-    var entry = request.object;
-    var bookId = entry.get("bookId");
-
-    var booksClass = Parse.Object.extend("books");
-    var query = new Parse.Query(booksClass);
-
-    query.get(bookId, {
-        success: function (book) {
-            var currentDownloadCount = book.get("downloadCount") || 0;
-            book.set("downloadCount", currentDownloadCount + 1);
-            book.set("updateSource", "incrementDownloadCount"); // very important so we don't add system:incoming tag
-            book.save(null, { useMasterKey: true }).then(
-                function () {},
-                function (error) {
-                    console.error("book.save failed: " + error);
-                    throw "book.save failed: " + error;
-                }
-            );
-        },
-        error: function (object, error) {
-            console.log("get error: " + error);
-        },
-    });
-});
-
-// March 2020: The following is only used by legacy (angular) BloomLibrary.
-// Return the books that should be shown in the default browse view.
-// Currently this is those in the Featured bookshelf, followed by all the others.
-// Each group is sorted alphabetically by title.
-// Todo: if we start using this again, we want additional filtering to remove
-// books where draft is true.
-Parse.Cloud.define("defaultBooks", function (request, response) {
-    console.log("bloom-parse-server main.js define defaultBooks function");
-    var first = request.params.first;
-    var count = request.params.count;
-    var includeOutOfCirculation = request.params.includeOutOfCirculation;
-    var allLicenses = request.params.allLicenses == true;
-
-    // In legacy bloomlibrary.org (angular), we hide books that aren't CC
-    // licensed. This is currently (Mar 2020) just 1% of our books, and also
-    // now we have a "use" for even closed-licensed books (reading on the web)
-    // so we might not do this in the new (react) blorg.
-    const restrictByLicense = (query) => {
-        var public = new Parse.Query("books");
-        public.startsWith("license", "cc"); // Not cc- so we include cc0
-
-        // We have some books (ok, just one at the moment) that are not CC
-        // but that's for a good reason (at the moment, a covid-19 health book
-        // where they don't want to allow you to modify it without permission,
-        // presumably to ensure that bad info doesn't go out.)
-        const overlook = new Parse.Query("books");
-        overlook.equalTo("tags", "system:overlookClosedLicense");
-
-        const publicOrOverlook = Parse.Query.or(public, overlook);
-        return Parse.Query.and(publicOrOverlook, query);
-    };
-
-    let featuredBooksQuery = new Parse.Query("books");
-    featuredBooksQuery.equalTo("tags", "bookshelf:Featured");
-    if (!includeOutOfCirculation)
-        featuredBooksQuery.containedIn("inCirculation", [true, undefined]);
-
-    if (!allLicenses)
-        featuredBooksQuery = restrictByLicense(featuredBooksQuery);
-    featuredBooksQuery.include("langPointers");
-    featuredBooksQuery.include("uploader");
-    featuredBooksQuery.ascending("title");
-    featuredBooksQuery.limit(1000000); // default is 100, supposedly. We want all of them.
-    featuredBooksQuery.find({
-        success: function (shelfBooks) {
-            var results = [];
-            var shelfIds = Object.create(null); // create an object with no properties to be a set
-            var resultIndex = 0;
-            for (var i = 0; i < shelfBooks.length; i++) {
-                if (resultIndex >= first && resultIndex < first + count) {
-                    results.push(shelfBooks[i]);
-                }
-                resultIndex++;
-                shelfIds[shelfBooks[i].id] = true; // put in set
-            }
-            var skip = 0;
-            // This function implements a query loop by calling itself inside each
-            // promise fulfilment if more results are needed.
-            var runQuery = function () {
-                let allBooksQuery = new Parse.Query("books");
-                if (!includeOutOfCirculation)
-                    allBooksQuery.containedIn("inCirculation", [
-                        true,
-                        undefined,
-                    ]);
-
-                if (!allLicenses) {
-                    allBooksQuery = restrictByLicense(allBooksQuery);
-                }
-                allBooksQuery.include("langPointers");
-                allBooksQuery.include("uploader");
-                allBooksQuery.ascending("title");
-                allBooksQuery.skip(skip); // skip the ones we already got
-                // REVIEW: would this work? Would it speed things up?  allBooksQuery.limit(count);
-                // It looks like maybe we're getting all 1000 books and then only
-                // copying "count" books into the results.
-
-                allBooksQuery.find({
-                    success: function (allBooks) {
-                        skip += allBooks.length; // skip these ones next iteration
-                        for (
-                            var i = 0;
-                            i < allBooks.length && resultIndex < first + count;
-                            i++
-                        ) {
-                            if (!(allBooks[i].id in shelfIds)) {
-                                if (resultIndex >= first) {
-                                    results.push(allBooks[i]);
-                                }
-                                resultIndex++;
-                            }
-                        }
-                        if (
-                            allBooks.length == 0 ||
-                            resultIndex >= first + count
-                        ) {
-                            // either we can't get any more, or we got all we need.
-                            response.success(results);
-                            return;
-                        }
-                        runQuery(); // launch another iteration.
-                    },
-                    error: function () {
-                        response.error("failed to find all books");
-                    },
-                });
-            };
-            runQuery(); // start the recursive loop.
-        },
-        error: function () {
-            response.error("failed to find books of featured shelf");
-        },
-    });
 });
 
 // This function is used to set up the fields used in the bloom library.
@@ -609,7 +392,7 @@ Parse.Cloud.define("defaultBooks", function (request, response) {
 //
 // NOTE: There is reason to believe that using this function to add columns of type Object does not work
 // and that they must be added manually (in the dashboard) instead.
-Parse.Cloud.define("setupTables", function (request, response) {
+Parse.Cloud.define("setupTables", async () => {
     // Required BloomLibrary classes/fields
     // Note: code below currently requires that 'books' is first.
     // Current code supports only String, Boolean, Number, Date, Array, Pointer<_User/Book/appDetailsInLanguage>,
@@ -799,7 +582,7 @@ Parse.Cloud.define("setupTables", function (request, response) {
     // only with the master key can we add fields or classes.
     //Parse.Cloud.useMasterKey();
 
-    var doOne = function () {
+    var doOne = async () => {
         var className = classes[ic].name;
         var parseClass = Parse.Object.extend(className);
         var instance = new parseClass();
@@ -846,108 +629,76 @@ Parse.Cloud.define("setupTables", function (request, response) {
                 //     break;
             }
         }
-        instance.save(null, {
+        const newObj = await instance.save(null, {
             useMasterKey: true,
-            success: function (newObj) {
-                // remember the new object so we can destroy it later, or use it as a relation target.
-                classes[ic].parseObject = newObj;
-                // if the class is one of the ones we reference in pointers or relations,
-                // remember the appropriate instance for use in creating a sample.
-                if (classes[ic].name == "books") {
-                    aBook = newObj;
-                }
-                ic++;
-                if (ic < classes.length) {
-                    doOne(); // recursive call to the main method to loop
-                } else {
-                    // Start a new recursive iteration to delete the objects we don't need.
-                    ic = 0;
-                    deleteOne();
-                }
-            },
-            error: function (error) {
-                console.log("instance.save failed: " + error);
-                response.error("instance.save failed: " + error);
-            },
         });
+
+        // remember the new object so we can destroy it later, or use it as a relation target.
+        classes[ic].parseObject = newObj;
+        // if the class is one of the ones we reference in pointers or relations,
+        // remember the appropriate instance for use in creating a sample.
+        if (classes[ic].name == "books") {
+            aBook = newObj;
+        }
+        ic++;
+        if (ic < classes.length) {
+            await doOne(); // recursive call to the main method to loop
+        } else {
+            // Start a new recursive iteration to delete the objects we don't need.
+            ic = 0;
+            await deleteOne();
+        }
     };
-    var deleteOne = function () {
+    var deleteOne = async () => {
         // Now we're done, the class and fields must exist; we don't actually want the instances
         var newObj = classes[ic].parseObject;
-        newObj.destroy({
+        await newObj.destroy({
             useMasterKey: true,
-            success: function () {
-                ic++;
-                if (ic < classes.length) {
-                    deleteOne(); // recursive loop
-                } else {
-                    cleanup();
-                }
-            },
-            error: function (error) {
-                response.error(error);
-            },
         });
+
+        ic++;
+        if (ic < classes.length) {
+            await deleteOne(); // recursive loop
+        } else {
+            await cleanup();
+        }
     };
-    var cleanup = function () {
+    var cleanup = async () => {
         // We've done the main job...now some details.
         var versionType = Parse.Object.extend("version");
         var query = new Parse.Query("version");
-        query.find({
-            success: function (results) {
-                var version;
-                if (results.length >= 1) {
-                    // updating an existing project, already has version table and instance
-                    version = results[0];
-                } else {
-                    version = new versionType();
-                }
-                version.set("minDesktopVersion", "2.0");
-                version.save(null, {
-                    useMasterKey: true,
-                    success: function () {
-                        // Finally destroy the spurious user we made.
-                        aUser.destroy({
-                            useMasterKey: true,
-                            success: function () {
-                                response.success(
-                                    "setupTables ran to completion."
-                                );
-                            },
-                            error: function (error) {
-                                response.error(error);
-                            },
-                        });
-                    },
-                    error: function (error) {
-                        console.log("version.save failed: " + error);
-                        response.error("version.save failed: " + error);
-                    },
-                });
-            },
-            error: function (error) {
-                response.error(error);
-            },
+        const results = await query.find();
+
+        var version;
+        if (results.length >= 1) {
+            // updating an existing project, already has version table and instance
+            version = results[0];
+        } else {
+            version = new versionType();
+        }
+        version.set("minDesktopVersion", "2.0");
+        await version.save(null, {
+            useMasterKey: true,
+        });
+
+        // Finally destroy the spurious user we made.
+        await aUser.destroy({
+            useMasterKey: true,
         });
     };
     // Create a user, temporarily, which we will delete later.
     // While debugging I got tired of having to manually remove previous "temporary" users,
     // hence each is now unique.
     var rand = parseInt(Math.random() * 10000, 10);
-    Parse.User.signUp(
+    const newUser = await Parse.User.signUp(
         "zzDummyUserForSetupTables" + rand,
         "unprotected",
-        { administrator: false },
-        {
-            success: function (newUser) {
-                aUser = newUser;
-                doOne(); // start the recursion.
-            },
-            error: function (error) {
-                response.error(error);
-            },
-        }
+        { administrator: false }
     );
+    aUser = newUser;
+    await doOne(); // start the recursion.
+
+    return "setupTables ran to completion.";
 });
 
 // This function expects to be passed params containing an id and JWT token
@@ -959,24 +710,18 @@ Parse.Cloud.define("setupTables", function (request, response) {
 // subsequently call a POST to users which will create the parse-server user with authData.
 // If there is a corresponding parse-server user with authData, the POST to users
 // will log them in.
-Parse.Cloud.define("bloomLink", async function (request, response) {
+Parse.Cloud.define("bloomLink", async (request) => {
     let user;
-    try {
-        var id = request.params.id;
-        //console.log(" bloomLink with request: " + JSON.stringify(request));
-        const query = new Parse.Query("User");
-        query.equalTo("username", id);
-        const results = await query.find({ useMasterKey: true });
-        if (results.length == 0) {
-            // No existing user. Nothing to do.
-            response.success("no existing user to link");
-            return;
-        } else {
-            user = results[0];
-        }
-    } catch (e) {
-        response.error(e);
-        return;
+    var id = request.params.id;
+    //console.log(" bloomLink with request: " + JSON.stringify(request));
+    const query = new Parse.Query("User");
+    query.equalTo("username", id);
+    const results = await query.find({ useMasterKey: true });
+    if (results.length == 0) {
+        // No existing user. Nothing to do.
+        return "no existing user to link";
+    } else {
+        user = results[0];
     }
 
     // The following code saves authData corresponding to the current token.
@@ -997,26 +742,15 @@ Parse.Cloud.define("bloomLink", async function (request, response) {
         //     "bloomLink setting user authdata to " + JSON.stringify(authData)
         // );
         user.set("authData", authData, { useMasterKey: true });
-        user.save(null, { useMasterKey: true }).then(
-            () => {
-                // console.log("bloomLink saved user: " + JSON.stringify(user));
-                response.success("linked parse-server user by adding authData");
-                return;
-            },
-            (error) => {
-                // console.log(
-                //     "bloomLink failed to save " + JSON.stringify(error)
-                // );
-                response.error(error);
-                return;
-            }
-        );
+        await user.save(null, { useMasterKey: true });
+
+        // console.log("bloomLink saved user: " + JSON.stringify(user));
+        return "linked parse-server user by adding authData";
     } else {
         // console.log(
         //     "bloomLink found existing authData: " +
         //         JSON.stringify(user.authData)
         // );
-        response.success("existing authData");
-        return;
+        return "existing authData";
     }
 });
