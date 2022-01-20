@@ -11,7 +11,6 @@
   "dependencies": {
     "express": "4.17.1",
     "jsonwebtoken": "^8.5.1",
-    "kerberos": "1.1.4",
     "mailgun-js": "^0.22.0",
     "node-rsa": "^1.0.8",
     "parse": "2.19.0",
@@ -23,8 +22,8 @@
   },
   "// See https://blogs.msdn.microsoft.com/azureossds/2016/04/20/nodejs-and-npm-versions-on-azure-app-services/": "",
   "engines": {
-    "node": "12.15.0",
-    "npm": "6.13.4"
+    "node": "16.13.0",
+    "npm": "8.1.0"
   },
   "devDependencies": {
     "eslint": "^6.8.0",
