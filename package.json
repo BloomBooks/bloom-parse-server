@@ -9,13 +9,11 @@
   },
   "license": "MIT",
   "dependencies": {
-    "express": "4.17.1",
+    "express": "4.17.2",
     "jsonwebtoken": "^8.5.1",
     "mailgun-js": "^0.22.0",
-    "node-rsa": "^1.0.8",
-    "parse": "2.19.0",
     "parse-dashboard": "3.3.0",
-    "parse-server": "4.5.0"
+    "parse-server": "4.10.4"
   },
   "scripts": {
     "start": "node index.js"
