@@ -44,6 +44,9 @@ var dashboard = new ParseDashboard(
                 masterKey: serverConfig.masterKey,
                 appName: serverConfig.appName,
                 production: serverConfig.serverURL.includes("production"),
+                // Work around a bug which causes the filter feature to crash.
+                // See https://github.com/parse-community/parse-dashboard/issues/1915.
+                columnPreference: {},
             },
         ],
         users: [
