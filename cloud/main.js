@@ -37,10 +37,10 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
     //Make and execute book query
     const bookQuery = new Parse.Query("books");
     bookQuery.limit(1000000); // Default is 100. We want all of them.
-    bookQuery.select("langPointers", "inCirculation", "draft");
+    bookQuery.select("langPointers", "inCirculation", "draft", "rebrand");
     const books = await bookQuery.find();
     books.forEach((book) => {
-        const { langPointers, inCirculation, draft } = book.attributes;
+        const { langPointers, inCirculation, draft, rebrand } = book.attributes;
         if (langPointers) {
             //Spin through each book's languages and increment usage count
             langPointers.forEach((langPtr) => {
@@ -49,13 +49,13 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
                     langCounts[id] = 0;
                 }
 
-                // We don't want out-of-circulation or draft books to
+                // We don't want out-of-circulation, draft, rebrand books to
                 // count toward our usage number, but we must not delete
                 // a language record that is used by a book, even if all
                 // the books that use it are drafts or out of circulation.
                 // So we keep track of possible such languages to prevent
                 // deleting them below.
-                if (inCirculation === false || draft === true) {
+                if (inCirculation === false || draft === true || rebrand) {
                     languageIdsUsedByUncountedBooks.add(id);
                 } else {
                     langCounts[id]++;
