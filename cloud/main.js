@@ -572,8 +572,8 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "index", type: "Integer" },
             ],
         },
-        // exclusiveCollections are explained in BL-10865. This is an array of strings.
-        { name: "exclusiveCollections", type: "Array" },
+        // rebrand is explained in BL-10865.
+        { name: "rebrand", type: "Boolean" },
     ];
 
     var ic = 0;
