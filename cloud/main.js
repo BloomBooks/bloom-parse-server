@@ -209,8 +209,7 @@ Parse.Cloud.beforeSave("books", function (request) {
             //
             // tags - For now, we don't bother enforcing that the prefix part (before the colon) is unique (keep it simple for now).
             //        If this is determined to be a requirement, then additional code needs to be added to handle that.
-            // bookshelves - We won't worry about the case where a moderator has deleted a bookshelf.
-            const arrayColumnsToUnion = ["tags", "bookshelves"];
+            const arrayColumnsToUnion = ["tags"];
             arrayColumnsToUnion.forEach((columnName) => {
                 const originalArrayValue = request.original.get(columnName);
                 if (originalArrayValue && originalArrayValue.length >= 1) {
@@ -251,25 +250,7 @@ Parse.Cloud.beforeSave("books", function (request) {
 
                 indexOfColon = "topic:".length - 1;
             }
-            // In Mar 2020 we moved bookshelf tags to their own column so that we could do
-            // regex on them without limiting what we could do with other tags
-            if (tagName.indexOf("bookshelf") === 0) {
-                // Note, we don't want to lose any bookshelves that we may have added by hand
-                // using the web ui. But means that if you hand-edit the meta.json to have one
-                // bookshelf, uploaded, realized a mistake, changed it and re-uploaded, well
-                // now you would have both bookshelves.
-                request.object.addUnique(
-                    "bookshelves",
-                    tagName.replace("bookshelf:", "")
-                );
-            }
-            /* TODO: Mar 2020: we are leaving bookshelf:foobar tags in for now so that we don't have to go into
-            the legacy angular code and adjust it to this new system. But once we retire that, we
-            should uncomment this else block so that the bookshelf tag is stripped, then run SaveAllBooks()
-            to remove it from all the records.
-             else {*/
             tagsOutput.push(tagName);
-            /* } */
 
             // We only want to put the relevant information from the tag into the search string.
             // i.e. for region:Asia, we only want Asia. We also exclude system tags.
@@ -309,9 +290,6 @@ Parse.Cloud.beforeSave("books", function (request) {
 });
 
 Parse.Cloud.afterSave("books", async (request) => {
-    // We no longer wish to automatically create bookshelves.
-    // It is too easy for a user (or even us mistakenly) to create them.
-
     // Now that we have saved the book, see if there are any new tags we need to create in the tag table.
     var book = request.object;
     var Tag = Parse.Object.extend("tag");
@@ -419,10 +397,6 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "bookLineage", type: "String" },
                 { name: "bookOrder", type: "String" },
                 { name: "bookletMakingIsAppropriate", type: "Boolean" },
-                // In Mar 2020 we moved the bookshelf: tag to this column. Currently incoming books still have
-                // the bookshelf: tag, and then beforeSave() takes them out of tags and pushes them in to this
-                // array.
-                { name: "bookshelves", type: "Array" },
                 { name: "copyright", type: "String" },
                 { name: "credits", type: "String" },
                 { name: "currentTool", type: "String" },
@@ -497,17 +471,6 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "importerMajorVersion", type: "Number" },
                 { name: "importerMinorVersion", type: "Number" },
                 // End fields required by RoseGarden
-            ],
-        },
-        {
-            name: "bookshelf",
-            fields: [
-                { name: "englishName", type: "String" },
-                { name: "key", type: "String" },
-                { name: "logoUrl", type: "String" },
-                { name: "normallyVisible", type: "Boolean" },
-                { name: "owner", type: "Pointer<_User>" },
-                { name: "category", type: "String" },
             ],
         },
         {
