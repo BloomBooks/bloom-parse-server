@@ -58,7 +58,7 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
         .find()
         .then((books) => {
             books.forEach((book) => {
-                const { langPointers, inCirculation, draft } = book.attributes;
+                const { langPointers, inCirculation, draft, rebrand } = book.attributes;
                 if (langPointers) {
                     //Spin through each book's languages and increment usage count
                     langPointers.forEach((langPtr) => {
