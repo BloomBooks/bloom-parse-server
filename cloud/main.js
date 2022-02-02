@@ -53,7 +53,7 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
     //Make and execute book query
     var bookQuery = new Parse.Query("books");
     bookQuery.limit(1000000); // Default is 100. We want all of them.
-    bookQuery.select("langPointers", "inCirculation", "draft");
+    bookQuery.select("langPointers", "inCirculation", "draft", "rebrand");
     bookQuery
         .find()
         .then((books) => {
@@ -73,7 +73,7 @@ Parse.Cloud.job("updateLanguageRecords", (request, res) => {
                         // the books that use it are drafts or out of circulation.
                         // So we keep track of possible such languages to prevent
                         // deleting them below.
-                        if (inCirculation === false || draft === true) {
+                        if (inCirculation === false || draft || rebrand) {
                             languageIdsUsedByUncountedBooks.add(id);
                         } else {
                             langCounts[id]++;
