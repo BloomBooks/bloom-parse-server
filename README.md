@@ -16,9 +16,9 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
 1. Install mongodb server
 
-1. Give mongodb a blank directory to work with, and run it:
+1. Give mongodb a blank directory to work with (create it first if it doesn't exist), and run it:
 
-   `mongod.exe --dbpath c:\temp\mongodata`
+   `path/to/mongod.exe --dbpath c:\temp\mongodata`
 
 1. Start up this server:
 
