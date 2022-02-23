@@ -136,6 +136,64 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
     request.message("Completed successfully.");
 });
 
+// Function for cleaning out the tag table of unused tags.
+// You can run it manually via REST:
+// curl -X POST -H "X-Parse-Application-Id: <app ID>" -H "X-Parse-Master-Key: <master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/functions/removeUnusedTags
+Parse.Cloud.define("removeUnusedTags", async (request) => {
+    request.log.info("removeUnusedTags - Starting.");
+    const tagCounts = {};
+    //Query each tag
+    const tagQuery = new Parse.Query("tag");
+    const tags = await tagQuery.find();
+    tags.forEach((tag) => {
+        tagCounts[tag.get("name")] = 0;
+    });
+    //Create a book query
+    const bookQuery = new Parse.Query("books");
+    bookQuery.limit(1000000); // default is 100, supposedly. We want all of them.
+    bookQuery.containedIn("inCirculation", [true, undefined]);
+    bookQuery.select("tags");
+    const books = await bookQuery.find();
+    books.forEach((book) => {
+        var bookTags = book.get("tags");
+        if (bookTags && bookTags.length) {
+            bookTags.forEach((tagName) => {
+                if (tagName.indexOf(":") < 0) {
+                    // In previous versions of Bloom, topics came in without the "topic:" prefix
+                    tagName = "topic:" + tagName;
+                }
+                if (tagName in tagCounts) {
+                    tagCounts[tagName]++;
+                }
+            });
+        }
+    });
+    const retval = [];
+    let errorCount = 0;
+    for (const tag of tags) {
+        const tagName = tag.get("name");
+        const count = tagCounts[tagName];
+        if (count === 0) {
+            try {
+                await tag.destroy({ useMasterKey: true });
+                retval.push(`removed unused tag "${tagName}"`);
+            } catch (error) {
+                retval.push(`failed to remove unused tag "${tagName}": ${error}`);
+                ++errorCount;
+            }
+        }
+        // MAYBE TODO: use count to populate usageCount column in tag table?  or remove usageCount column?
+    }
+    if (errorCount === 0)
+        request.log.info("removeUnusedTags - Completed successfully.");
+    else
+        request.log.info(`removeUnusedTags - Completed with ${errorCount} errors removing tags.`);
+    // REVIEW: should we return the tagCounts object as well as well as noting which tags were removed?
+    if (retval.length === 0)
+        return "There were no unused tags.";
+    return retval;
+});
+
 // Makes new and updated books have the right search string and ACL.
 Parse.Cloud.beforeSave("books", function (request) {
     const book = request.object;
