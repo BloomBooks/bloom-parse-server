@@ -529,6 +529,8 @@ Parse.Cloud.define("setupTables", async () => {
                 // End fields required by RoseGarden
                 // rebrand is explained in BL-10865.
                 { name: "rebrand", type: "Boolean" },
+                // bloomPUBVersion is explained in BL-10720
+                { name: "bloomPUBVersion", type: "Number" },
             ],
         },
         {
