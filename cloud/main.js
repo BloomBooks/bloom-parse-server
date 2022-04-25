@@ -200,7 +200,6 @@ function basicBookValidationRules(request) {
     const book = request.object;
     if (
         !book.get("title") ||
-        !book.get("baseUrl") ||
         !book.get("bookInstanceId") ||
         !book.get("uploader")
     ) {
