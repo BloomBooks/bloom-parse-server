@@ -178,7 +178,9 @@ Parse.Cloud.define("removeUnusedTags", async (request) => {
                 await tag.destroy({ useMasterKey: true });
                 retval.push(`removed unused tag "${tagName}"`);
             } catch (error) {
-                retval.push(`failed to remove unused tag "${tagName}": ${error}`);
+                retval.push(
+                    `failed to remove unused tag "${tagName}": ${error}`
+                );
                 ++errorCount;
             }
         }
@@ -186,9 +188,10 @@ Parse.Cloud.define("removeUnusedTags", async (request) => {
     if (errorCount === 0)
         request.log.info("removeUnusedTags - Completed successfully.");
     else
-        request.log.info(`removeUnusedTags - Completed with ${errorCount} errors removing tags.`);
-    if (retval.length === 0)
-        return "There were no unused tags.";
+        request.log.info(
+            `removeUnusedTags - Completed with ${errorCount} errors removing tags.`
+        );
+    if (retval.length === 0) return "There were no unused tags.";
     return retval;
 });
 
@@ -553,9 +556,7 @@ Parse.Cloud.define("setupTables", async () => {
         },
         {
             name: "tag",
-            fields: [
-                { name: "name", type: "String" },
-            ],
+            fields: [{ name: "name", type: "String" }],
         },
         {
             name: "relatedBooks",
