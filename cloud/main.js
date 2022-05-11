@@ -178,7 +178,9 @@ Parse.Cloud.define("removeUnusedTags", async (request) => {
                 await tag.destroy({ useMasterKey: true });
                 retval.push(`removed unused tag "${tagName}"`);
             } catch (error) {
-                retval.push(`failed to remove unused tag "${tagName}": ${error}`);
+                retval.push(
+                    `failed to remove unused tag "${tagName}": ${error}`
+                );
                 ++errorCount;
             }
         }
@@ -186,164 +188,187 @@ Parse.Cloud.define("removeUnusedTags", async (request) => {
     if (errorCount === 0)
         request.log.info("removeUnusedTags - Completed successfully.");
     else
-        request.log.info(`removeUnusedTags - Completed with ${errorCount} errors removing tags.`);
-    if (retval.length === 0)
-        return "There were no unused tags.";
+        request.log.info(
+            `removeUnusedTags - Completed with ${errorCount} errors removing tags.`
+        );
+    if (retval.length === 0) return "There were no unused tags.";
     return retval;
 });
 
-// Makes new and updated books have the right search string and ACL.
-Parse.Cloud.beforeSave("books", function (request) {
+// Prevent bogus records. See BL-11123.
+function basicBookValidationRules(request) {
     const book = request.object;
-
-    console.log("entering bloom-parse-server main.js beforeSave books");
-
-    // The original purpose of the updateSource field was so we could set system:Incoming on every book
-    // when it is uploaded or reuploaded from BloomDesktop without doing so for changes from the datagrid.
-    //
-    // Now, we also use it to set harvestState to "New" or "Updated" depending on if the book record is new.
-    //
-    // We also set lastUploaded for old (pre-4.7) BloomDesktops which don't set it themselves.
-    let newUpdateSource = book.get("updateSource");
-    // Apparently, "dirty" just means we provided it, regardless of whether or not it changed.
-    // Careful not to use book.dirty("updateSource") which seems to always be true.
-    if (!book.dirtyKeys().includes("updateSource")) {
-        // For old BloomDesktops which didn't set the updateSource, we use this hack
-        if (
-            request.headers["user-agent"] &&
-            request.headers["user-agent"].startsWith("RestSharp")
-        ) {
-            newUpdateSource = "BloomDesktop old";
-            book.set("lastUploaded", {
-                __type: "Date",
-                iso: new Date().toISOString(),
-            });
-        }
-        // direct change on the dashboard (either using "Browser" view or "API Console")
-        else if (
-            request.headers.referer &&
-            request.headers.referer.indexOf("dashboard/apps/BloomLibrary.org") >
-                -1
-        ) {
-            newUpdateSource = "parse dashboard";
-        }
-        // someone forgot to set updateSource
-        else {
-            newUpdateSource = "unknown";
-        }
-        book.set("updateSource", newUpdateSource);
+    if (
+        !book.get("title") ||
+        !book.get("bookInstanceId") ||
+        !book.get("uploader")
+    ) {
+        request.log.warn(
+            `books beforeSave trigger prevented book save; inadequate data for saving book: ${JSON.stringify(
+                request
+            )}`
+        );
+        throw "invalid data";
     }
-    // As of April 2020, BloomDesktop 4.7 now sets the updateSource to "BloomDesktop {version}".
-    if (newUpdateSource.startsWith("BloomDesktop")) {
-        // Change came from BloomDesktop upload (or reupload)
-        book.addUnique("tags", "system:Incoming");
-        if (book.isNew()) {
-            book.set("harvestState", "New");
-        } else {
-            book.set("harvestState", "Updated");
-        }
+}
 
-        // Prevent book uploads from overwriting certain fields changed by moderators
-        if (request.original) {
-            // These columns will not be overwritten unless the new book has truth-y values for them
-            // For scalar columns (these are more straightforward than array columns)
-            const scalarColumnsWithFallback = [
-                "summary",
-                "librarianNote",
-                "publisher",
-                "originalPublisher",
-            ];
-            scalarColumnsWithFallback.forEach((columnName) => {
-                const newValue = book.get(columnName);
-                const originalValue = request.original.get(columnName);
-                if (!newValue && originalValue) {
-                    book.set(columnName, originalValue);
-                }
-            });
+// Makes new and updated books have the right search string and ACL.
+Parse.Cloud.beforeSave(
+    "books",
+    function (request) {
+        const book = request.object;
 
-            // These columns are array columns, for which we want to preserve all the pre-existing values
-            //
-            // tags - For now, we don't bother enforcing that the prefix part (before the colon) is unique (keep it simple for now).
-            //        If this is determined to be a requirement, then additional code needs to be added to handle that.
-            const arrayColumnsToUnion = ["tags"];
-            arrayColumnsToUnion.forEach((columnName) => {
-                const originalArrayValue = request.original.get(columnName);
-                if (originalArrayValue && originalArrayValue.length >= 1) {
-                    book.addAllUnique(columnName, originalArrayValue);
-                }
-            });
+        console.log("entering bloom-parse-server main.js beforeSave books");
 
-            // Features is able to be changed by moderators, but it's also computed by BloomDesktop. Even if it's empty, keep the BloomDesktop value.
-            // My sense is that the auto-computed value is generally more likely to be correct than the value from the DB.
-            // The user might've removed all the pages with that feature.
-            //
-            // langPointers can also be changed by moderators. But it's difficult to keep track of what languages a moderator removed
-            // versus what is a newly added language. So for now, we'll live with not modifying langPointers.
-        }
-    }
-
-    // Bloom 3.6 and earlier set the authors field, but apparently, because it
-    // was null or undefined, parse.com didn't try to add it as a new field.
-    // When we migrated from parse.com to parse server,
-    // we started getting an error because uploading a book was trying to add
-    // 'authors' as a new field, but it didn't have permission to do so.
-    // In theory, we could just unset the field here:
-    // request.object.unset("authors"),
-    // but that doesn't prevent the column from being added, either.
-    // Unfortunately, that means we simply had to add authors to the schema. (BL-4001)
-
-    var tagsIncoming = book.get("tags");
-    var search = (book.get("title") || "").toLowerCase();
-    var index;
-    const tagsOutput = [];
-    if (tagsIncoming) {
-        for (index = 0; index < tagsIncoming.length; ++index) {
-            var tagName = tagsIncoming[index];
-            var indexOfColon = tagName.indexOf(":");
-            if (indexOfColon < 0) {
-                // From older versions of Bloom, topics come in without the "topic:" prefix
-                tagName = "topic:" + tagName;
-
-                indexOfColon = "topic:".length - 1;
+        // The original purpose of the updateSource field was so we could set system:Incoming on every book
+        // when it is uploaded or reuploaded from BloomDesktop without doing so for changes from the datagrid.
+        //
+        // Now, we also use it to set harvestState to "New" or "Updated" depending on if the book record is new.
+        //
+        // We also set lastUploaded for old (pre-4.7) BloomDesktops which don't set it themselves.
+        let newUpdateSource = book.get("updateSource");
+        // Apparently, "dirty" just means we provided it, regardless of whether or not it changed.
+        // Careful not to use book.dirty("updateSource") which seems to always be true.
+        if (!book.dirtyKeys().includes("updateSource")) {
+            // For old BloomDesktops which didn't set the updateSource, we use this hack
+            if (
+                request.headers["user-agent"] &&
+                request.headers["user-agent"].startsWith("RestSharp")
+            ) {
+                newUpdateSource = "BloomDesktop old";
+                book.set("lastUploaded", {
+                    __type: "Date",
+                    iso: new Date().toISOString(),
+                });
             }
-            tagsOutput.push(tagName);
-
-            // We only want to put the relevant information from the tag into the search string.
-            // i.e. for region:Asia, we only want Asia. We also exclude system tags.
-            // Our current search doesn't handle multi-string searching, anyway, so even if you knew
-            // to search for 'region:Asia' (which would never be obvious to the user), you would get
-            // a union of 'region' results and 'Asia' results.
-            // Other than 'system:', the prefixes are currently only used to separate out the labels
-            // in the sidebar of the browse view.
-            if (tagName.startsWith("system:")) continue;
-            var tagNameForSearch = tagName.substr(indexOfColon + 1);
-            search = search + " " + tagNameForSearch.toLowerCase();
+            // direct change on the dashboard (either using "Browser" view or "API Console")
+            else if (
+                request.headers.referer &&
+                request.headers.referer.indexOf(
+                    "dashboard/apps/BloomLibrary.org"
+                ) > -1
+            ) {
+                newUpdateSource = "parse dashboard";
+            }
+            // someone forgot to set updateSource
+            else {
+                newUpdateSource = "unknown";
+            }
+            book.set("updateSource", newUpdateSource);
         }
-    }
-    request.object.set("tags", tagsOutput);
-    request.object.set("search", search);
+        // As of April 2020, BloomDesktop 4.7 now sets the updateSource to "BloomDesktop {version}".
+        if (newUpdateSource.startsWith("BloomDesktop")) {
+            // Change came from BloomDesktop upload (or reupload)
+            book.addUnique("tags", "system:Incoming");
+            if (book.isNew()) {
+                book.set("harvestState", "New");
+            } else {
+                book.set("harvestState", "Updated");
+            }
 
-    // Transfer bookLineage, which is a comma-separated string, into an array for better querying
-    const bookLineage = book.get("bookLineage");
-    let bookLineageArray = undefined;
-    if (bookLineage) {
-        bookLineageArray = bookLineage.split(",");
-    }
-    request.object.set("bookLineageArray", bookLineageArray);
+            // Prevent book uploads from overwriting certain fields changed by moderators
+            if (request.original) {
+                // These columns will not be overwritten unless the new book has truth-y values for them
+                // For scalar columns (these are more straightforward than array columns)
+                const scalarColumnsWithFallback = [
+                    "summary",
+                    "librarianNote",
+                    "publisher",
+                    "originalPublisher",
+                ];
+                scalarColumnsWithFallback.forEach((columnName) => {
+                    const newValue = book.get(columnName);
+                    const originalValue = request.original.get(columnName);
+                    if (!newValue && originalValue) {
+                        book.set(columnName, originalValue);
+                    }
+                });
 
-    var creator = request.user;
+                // These columns are array columns, for which we want to preserve all the pre-existing values
+                //
+                // tags - For now, we don't bother enforcing that the prefix part (before the colon) is unique (keep it simple for now).
+                //        If this is determined to be a requirement, then additional code needs to be added to handle that.
+                const arrayColumnsToUnion = ["tags"];
+                arrayColumnsToUnion.forEach((columnName) => {
+                    const originalArrayValue = request.original.get(columnName);
+                    if (originalArrayValue && originalArrayValue.length >= 1) {
+                        book.addAllUnique(columnName, originalArrayValue);
+                    }
+                });
 
-    if (creator && request.object.isNew()) {
-        // created normally, someone is logged in and we know who, restrict access
-        var newACL = new Parse.ACL();
-        // According to https://parse.com/questions/beforesave-user-set-permissions-for-self-and-administrators,
-        // a user can always write their own object, so we don't need to permit that.
-        newACL.setPublicReadAccess(true);
-        newACL.setRoleWriteAccess("moderator", true); // allows moderators to delete
-        newACL.setWriteAccess(creator, true);
-        request.object.setACL(newACL);
-    }
-});
+                // Features is able to be changed by moderators, but it's also computed by BloomDesktop. Even if it's empty, keep the BloomDesktop value.
+                // My sense is that the auto-computed value is generally more likely to be correct than the value from the DB.
+                // The user might've removed all the pages with that feature.
+                //
+                // langPointers can also be changed by moderators. But it's difficult to keep track of what languages a moderator removed
+                // versus what is a newly added language. So for now, we'll live with not modifying langPointers.
+            }
+        }
+
+        // Bloom 3.6 and earlier set the authors field, but apparently, because it
+        // was null or undefined, parse.com didn't try to add it as a new field.
+        // When we migrated from parse.com to parse server,
+        // we started getting an error because uploading a book was trying to add
+        // 'authors' as a new field, but it didn't have permission to do so.
+        // In theory, we could just unset the field here:
+        // request.object.unset("authors"),
+        // but that doesn't prevent the column from being added, either.
+        // Unfortunately, that means we simply had to add authors to the schema. (BL-4001)
+
+        var tagsIncoming = book.get("tags");
+        var search = (book.get("title") || "").toLowerCase();
+        var index;
+        const tagsOutput = [];
+        if (tagsIncoming) {
+            for (index = 0; index < tagsIncoming.length; ++index) {
+                var tagName = tagsIncoming[index];
+                var indexOfColon = tagName.indexOf(":");
+                if (indexOfColon < 0) {
+                    // From older versions of Bloom, topics come in without the "topic:" prefix
+                    tagName = "topic:" + tagName;
+
+                    indexOfColon = "topic:".length - 1;
+                }
+                tagsOutput.push(tagName);
+
+                // We only want to put the relevant information from the tag into the search string.
+                // i.e. for region:Asia, we only want Asia. We also exclude system tags.
+                // Our current search doesn't handle multi-string searching, anyway, so even if you knew
+                // to search for 'region:Asia' (which would never be obvious to the user), you would get
+                // a union of 'region' results and 'Asia' results.
+                // Other than 'system:', the prefixes are currently only used to separate out the labels
+                // in the sidebar of the browse view.
+                if (tagName.startsWith("system:")) continue;
+                var tagNameForSearch = tagName.substr(indexOfColon + 1);
+                search = search + " " + tagNameForSearch.toLowerCase();
+            }
+        }
+        request.object.set("tags", tagsOutput);
+        request.object.set("search", search);
+
+        // Transfer bookLineage, which is a comma-separated string, into an array for better querying
+        const bookLineage = book.get("bookLineage");
+        let bookLineageArray = undefined;
+        if (bookLineage) {
+            bookLineageArray = bookLineage.split(",");
+        }
+        request.object.set("bookLineageArray", bookLineageArray);
+
+        var creator = request.user;
+
+        if (creator && request.object.isNew()) {
+            // created normally, someone is logged in and we know who, restrict access
+            var newACL = new Parse.ACL();
+            // According to https://parse.com/questions/beforesave-user-set-permissions-for-self-and-administrators,
+            // a user can always write their own object, so we don't need to permit that.
+            newACL.setPublicReadAccess(true);
+            newACL.setRoleWriteAccess("moderator", true); // allows moderators to delete
+            newACL.setWriteAccess(creator, true);
+            request.object.setACL(newACL);
+        }
+    },
+    basicBookValidationRules
+);
 
 Parse.Cloud.afterSave("books", async (request) => {
     // Now that we have saved the book, see if there are any new tags we need to create in the tag table.
@@ -529,6 +554,8 @@ Parse.Cloud.define("setupTables", async () => {
                 // End fields required by RoseGarden
                 // rebrand is explained in BL-10865.
                 { name: "rebrand", type: "Boolean" },
+                // bloomPUBVersion is explained in BL-10720
+                { name: "bloomPUBVersion", type: "Number" },
             ],
         },
         {
@@ -551,9 +578,7 @@ Parse.Cloud.define("setupTables", async () => {
         },
         {
             name: "tag",
-            fields: [
-                { name: "name", type: "String" },
-            ],
+            fields: [{ name: "name", type: "String" }],
         },
         {
             name: "relatedBooks",

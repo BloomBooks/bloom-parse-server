@@ -6,11 +6,11 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
 ### Set Up For Local Development
 
-1. Make sure you have at least Node 4.3.
+1. Make sure you have Node 16.13.
 
    `node --version`
 
-1. Clone this repo and go into its directory, and install or update the dependencies:
+1. Clone this repo and go into its directory, and install or update the dependencies (use npm, *not* yarn):
 
    `npm install`
 
@@ -50,8 +50,8 @@ See above for setting up the dashboard locally.
 
 Public dashboards:
 
-- Production: [http://parsedashboard.bloomlibrary.org](http://parsedashboard.bloomlibrary.org)
-- Development: [http://dev-parsedashboard.bloomlibrary.org](http://dev-parsedashboard.bloomlibrary.org)
+- Production: [https://parsedashboard.bloomlibrary.org](https://parsedashboard.bloomlibrary.org)
+- Development: [https://dev-parsedashboard.bloomlibrary.org](https://dev-parsedashboard.bloomlibrary.org)
 
 You will be required to log in. The username is the appId, and the password is the masterKey.
 
