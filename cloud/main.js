@@ -219,7 +219,8 @@ function updateHasBloomPub(book) {
     // Basically, if the harvester made one at all, the user (uploader) opinion of it
     // beats the librarian opinion which beats the harvester's own opinion, depending on which
     // of these is actually recorded.
-    let readerSettings = book.show && book.show.bloomReader;
+    const show = book.get("show");
+    let readerSettings = show && show.bloomReader;
     let hasBloomPub = false;
     if (readerSettings && readerSettings.exists !== false) {
         if (readerSettings.user !== undefined) {
@@ -230,17 +231,17 @@ function updateHasBloomPub(book) {
             hasBloomPub = readerSettings.harvester !== false;
         }
     }
-    book.hasBloomPub = hasBloomPub;
+    book.set("hasBloomPub", hasBloomPub);
 }
 
 // Makes new and updated books have the right search string and ACL.
 Parse.Cloud.beforeSave(
     "books",
     function (request) {
+        console.log("entering bloom-parse-server main.js beforeSave books");
+
         const book = request.object;
         updateHasBloomPub(book);
-
-        console.log("entering bloom-parse-server main.js beforeSave books");
 
         // The original purpose of the updateSource field was so we could set system:Incoming on every book
         // when it is uploaded or reuploaded from BloomDesktop without doing so for changes from the datagrid.
@@ -522,7 +523,7 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "readerToolsAvailable", type: "Boolean" },
                 { name: "search", type: "String" },
                 { name: "show", type: "Object" },
-                { name: "hasBloomPub", type: "Boolean"},
+                { name: "hasBloomPub", type: "Boolean" },
                 { name: "suitableForMakingShells", type: "Boolean" },
                 { name: "suitableForVernacularLibrary", type: "Boolean" },
                 { name: "summary", type: "String" },
