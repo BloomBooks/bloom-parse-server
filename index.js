@@ -1,6 +1,5 @@
 var express = require("express");
 var ParseServer = require("parse-server").ParseServer;
-var path = require("path");
 var ParseDashboard = require("parse-dashboard");
 var BloomFirebaseAuthAdapter = require("./bloomFirebaseAuthAdapter");
 
@@ -30,34 +29,24 @@ var api = new ParseServer(serverConfig);
 // If you wish you require them, you can set them as options in the initialization above:
 // javascriptKey, restAPIKey, dotNetKey, clientKey
 
-// Because we are running this on Azure, for some reason, it cannot determine the connection is secure even if it is.
-// I tried setting trustProxy to true instead, but that still didn't work.
-// Setting this to true mirrors the way it is handled in https://github.com/Azure/parse-server-example (as of 12/7/16).
-var allowInsecureHTTP = true;
-var dashboard = new ParseDashboard(
-    {
-        allowInsecureHTTP: allowInsecureHTTP,
-        apps: [
-            {
-                appId: serverConfig.appId,
-                serverURL: serverConfig.serverURL,
-                masterKey: serverConfig.masterKey,
-                appName: serverConfig.appName,
-                production: serverConfig.serverURL.includes("production"),
-                // Work around a bug which causes the filter feature to crash.
-                // See https://github.com/parse-community/parse-dashboard/issues/1915.
-                columnPreference: {},
-            },
-        ],
-        users: [
-            {
-                user: serverConfig.appId,
-                pass: serverConfig.masterKey,
-            },
-        ],
-    },
-    { allowInsecureHTTP: allowInsecureHTTP }
-);
+var dashboard = new ParseDashboard({
+    apps: [
+        {
+            appId: serverConfig.appId,
+            serverURL: serverConfig.serverURL,
+            masterKey: serverConfig.masterKey,
+            appName: serverConfig.appName,
+            production: serverConfig.serverURL.includes("production"),
+        },
+    ],
+    trustProxy: 1,
+    users: [
+        {
+            user: serverConfig.appId,
+            pass: serverConfig.masterKey,
+        },
+    ],
+});
 
 var app = express();
 
