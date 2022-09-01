@@ -1,22 +1,21 @@
-var express = require("express");
-var ParseServer = require("parse-server").ParseServer;
-var ParseDashboard = require("parse-dashboard");
-var BloomFirebaseAuthAdapter = require("./bloomFirebaseAuthAdapter");
+const express = require("express");
+const ParseServer = require("parse-server").ParseServer;
+const ParseDashboard = require("parse-dashboard");
+const BloomFirebaseAuthAdapter = require("./bloomFirebaseAuthAdapter");
 
-var databaseUri = process.env.DATABASE_URI || process.env.MONGODB_URI;
+const databaseUri = process.env.DATABASE_URI || process.env.MONGODB_URI;
 
 if (!databaseUri) {
     console.log("DATABASE_URI not specified, falling back to localhost.");
 }
 
-var serverUrl = process.env.SERVER_URL || "http://localhost:1337/parse";
-
-var serverConfig = {
+const serverConfig = {
     databaseURI: databaseUri || "mongodb://localhost:27017/dev",
     cloud: process.env.CLOUD_CODE_MAIN || __dirname + "/cloud/main.js",
     appId: process.env.APP_ID || "myAppId",
     masterKey: process.env.MASTER_KEY || "123",
-    serverURL: serverUrl,
+    readOnlyMasterKey: process.env.READ_ONLY_MASTER_KEY || "ro",
+    serverURL: process.env.SERVER_URL || "http://localhost:1337/parse",
 
     appName: process.env.APP_NAME || "BloomLibrary.org",
 
@@ -24,17 +23,15 @@ var serverConfig = {
 
     allowClientClassCreation: false,
 };
-var api = new ParseServer(serverConfig);
-// Client-keys like the javascript key or the .NET key are not necessary with parse-server
-// If you wish you require them, you can set them as options in the initialization above:
-// javascriptKey, restAPIKey, dotNetKey, clientKey
+const api = new ParseServer(serverConfig);
 
-var dashboard = new ParseDashboard({
+const dashboard = new ParseDashboard({
     apps: [
         {
             appId: serverConfig.appId,
             serverURL: serverConfig.serverURL,
             masterKey: serverConfig.masterKey,
+            readOnlyMasterKey: serverConfig.readOnlyMasterKey,
             appName: serverConfig.appName,
             production: serverConfig.serverURL.includes("production"),
         },
@@ -45,19 +42,39 @@ var dashboard = new ParseDashboard({
             user: serverConfig.appId,
             pass: serverConfig.masterKey,
         },
+        {
+            user: "master",
+            pass: serverConfig.masterKey,
+        },
+        {
+            user: "readonly",
+            pass: serverConfig.readOnlyMasterKey,
+            readOnly: true,
+        },
     ],
 });
 
-var app = express();
+const app = express();
+
+// The main thing here is the google-site-verification meta tag.
+// This lets us access the site on the Google Search Console.
+app.get("/", function (req, res) {
+    res.status(200).send(
+        "<html>" +
+            '<head><meta name="google-site-verification" content="dm8VsqC5uw-fikoD-4ZxYbPfzV-qYyrPCJq7aIgvlJo" /></head>' +
+            '<body><a href="https://bloomlibrary.org">Bloom Library</a></body>' +
+            "</html>"
+    );
+});
 
 // Serve the Parse API on the /parse URL prefix
-var mountPath = process.env.PARSE_MOUNT || "/parse";
+const mountPath = process.env.PARSE_MOUNT || "/parse";
 app.use(mountPath, api);
 
 app.use("/dashboard", dashboard);
 
-var port = process.env.PORT || 1337;
-var httpServer = require("http").createServer(app);
+const port = process.env.PORT || 1337;
+const httpServer = require("http").createServer(app);
 httpServer.listen(port, function () {
     console.log("bloom-parse-server running on port " + port + ".");
 });
