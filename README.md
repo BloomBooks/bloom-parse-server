@@ -10,7 +10,7 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
    `node --version`
 
-1. Clone this repo and go into its directory, and install or update the dependencies (use npm, *not* yarn):
+1. Clone this repo and go into its directory, and install or update the dependencies (use npm, _not_ yarn):
 
    `npm install`
 
@@ -26,7 +26,7 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
    Or, to debug, open bloom-parse-server in vscode, F5 (Debug: Launch via NPM). Note that this sets the masterKey to "123", via an environment variable.
 
-1. Setup or update the mongodb Schema
+1. Setup or update the schema:
 
    ```
    curl -X POST -H "X-Parse-Application-Id: myAppId" -H "X-Parse-Master-Key: 123" -d "{}" http://localhost:1337/parse/functions/setupTables
@@ -42,7 +42,17 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
    Go to [http://localhost:1337/dashboard](http://localhost:1337/dashboard)
 
-   You will be required to log in. The username is the appId ('myAppId'), and the password is the masterKey ('123').
+   You will be required to log in.
+
+   For write access:
+
+   - username = "master"
+   - password = the master key ("123")
+
+   For read-only access:
+
+   - username = "readonly"
+   - password = the read-only master key ("ro")
 
 ### Dashboard
 
@@ -53,7 +63,17 @@ Public dashboards:
 - Production: [https://parsedashboard.bloomlibrary.org](https://parsedashboard.bloomlibrary.org)
 - Development: [https://dev-parsedashboard.bloomlibrary.org](https://dev-parsedashboard.bloomlibrary.org)
 
-You will be required to log in. The username is the appId, and the password is the masterKey.
+You will be required to log in.
+
+For write access:
+
+- username = "master"
+- password = the master key
+
+For read-only access:
+
+- username = "readonly"
+- password = the read-only master key
 
 ### Sample Queries
 
@@ -71,7 +91,7 @@ Notes below on Azure Setup are relevant to deployment, but I wanted to separate 
 
 #### develop branch
 
-Once changes have been pushed to the develop branch,
+Once changes have been pushed to the `develop` branch,
 
 1. Go to the Azure portal (portal.azure.com). Access must be granted by LTOps.
 2. Open the bloom-parse-server-develop app service.
@@ -87,9 +107,11 @@ Once changes have been pushed to the develop branch,
 11. Deployment and restart of the service can take several minutes.
     - During this time, the dashboard and library part of the website will be down.
 
+Note that changes in the `develop` branch will be automatically deployed to the unittest instance.
+
 #### master branch
 
-Once changes have been merged to the master branch,
+Once changes have been merged to the `master` branch,
 
 1. Follow the same steps as develop except the app service names are
 
