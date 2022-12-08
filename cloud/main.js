@@ -110,7 +110,7 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
                 successfulDeletes.length
             } languages which had no books: ${successfulDeletes.map(
                 (lang) =>
-                    `{objectId: ${lang.get("objectId")}, isoCode: ${lang.get(
+                    `{objectId: ${lang.id}, isoCode: ${lang.get(
                         "isoCode"
                     )}, name: ${lang.get("name")}}`
             )}`
