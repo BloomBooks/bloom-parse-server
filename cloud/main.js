@@ -73,7 +73,8 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
 
         if (
             newUsageCount === 0 &&
-            !languageIdsUsedByUncountedBooks.has(language.id)
+            !languageIdsUsedByUncountedBooks.has(language.id) &&
+            !isLanguageRecordNew(language)
         ) {
             languagesToDelete.push(language);
         }
@@ -138,6 +139,18 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
     request.log.info("updateLanguageRecords - Completed successfully.");
     request.message("Completed successfully.");
 });
+
+// We are trying to determine if we should delete a language record
+// which is not in use. But we also don't want to delete something which was newly created
+// and for which the corresponding book record has not yet been created. See BL-11818.
+// So, for now we'll define "new" as within two hours. Probably could safely be one.
+function isLanguageRecordNew(language) {
+    const twoHoursAgo = new Date();
+    twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
+    console.log(twoHoursAgo);
+    console.log(language.createdAt);
+    return language.createdAt > twoHoursAgo;
+}
 
 // Function for cleaning out the tag table of unused tags.
 // You can run it manually via REST:
