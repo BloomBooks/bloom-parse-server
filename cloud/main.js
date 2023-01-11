@@ -147,8 +147,6 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
 function isLanguageRecordNew(language) {
     const twoHoursAgo = new Date();
     twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
-    console.log(twoHoursAgo);
-    console.log(language.createdAt);
     return language.createdAt > twoHoursAgo;
 }
 
