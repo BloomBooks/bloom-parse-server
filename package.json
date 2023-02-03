@@ -18,10 +18,10 @@
   "scripts": {
     "start": "node index.js"
   },
-  "// See https://blogs.msdn.microsoft.com/azureossds/2016/04/20/nodejs-and-npm-versions-on-azure-app-services/": "",
+  "// On the server, this is set in Configuration > Application settings > WEBSITE_NODE_DEFAULT_VERSION": " ",
+  "// (18.12.1 as of Feb 2023)": " ",
   "engines": {
-    "node": "16.13.0",
-    "npm": "8.1.0"
+    "node": ">=16 <19"
   },
   "devDependencies": {
     "eslint": "^6.8.0",
