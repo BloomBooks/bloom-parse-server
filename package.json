@@ -13,10 +13,11 @@
     "jsonwebtoken": "^9.0.0",
     "mailgun-js": "^0.22.0",
     "parse-dashboard": "5.0.0",
-    "parse-server": "5.4.0"
+    "parse-server": "5.4.1"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "postinstall": "patch-package"
   },
   "// On the server, this is set in Configuration > Application settings > WEBSITE_NODE_DEFAULT_VERSION": " ",
   "// (18.12.1 as of Feb 2023)": " ",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "eslint": "^6.8.0",
+    "patch-package": "^6.5.1",
     "prettier": "^2.8.3"
   }
 }
