@@ -1,0 +1,5 @@
+In parse-server 5.2.5, they made a security "fix" to prevent searching on user email (among other fields).
+See https://github.com/parse-community/parse-server/blob/6.0.0/changelogs/CHANGELOG_release.md#525-2022-09-02.
+We decided to just allow this "security hole," thus I've made the simplest change to prevent the check, commenting two lines.
+
+Maybe some day parse-server will allow for this to be configurable. Or maybe we will even submit a PR.
