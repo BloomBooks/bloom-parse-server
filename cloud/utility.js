@@ -28,7 +28,23 @@ Parse.Cloud.define("setArtifactLangTags", async (request) => {
         }
 
         // Parse the JSON string to a JavaScript object
-        const allTitles = JSON.parse(allTitlesJson);
+        let allTitles;
+        let allTitlesJsonEscaped;
+        try {
+            // This is confusing, but if we find \" or a control character, we need to escape so that parsing will give us back what we started with.
+            // Adding to the confusion, each \ in the replacement string has to, itself, be escaped.
+            allTitlesJsonEscaped = allTitlesJson
+                .replace(/\\"/g, '\\\\\\"') // \" -> \\\"
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/\t/g, "\\t");
+            allTitles = JSON.parse(allTitlesJsonEscaped);
+        } catch (e) {
+            request.log.error(
+                `setArtifactLangTags failed to parse allTitlesJson for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`, allTitlesJsonEscaped \`${allTitlesJsonEscaped}\`.`
+            );
+            return; // continue
+        }
 
         const languageTags = getKeysByValue(allTitles, title);
         if (languageTags.length > 1) {
@@ -38,7 +54,7 @@ Parse.Cloud.define("setArtifactLangTags", async (request) => {
             return; // continue
         } else if (languageTags.length === 0) {
             request.log.info(
-                `setArtifactLangTags failed to find a languageTag for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`.`
+                `setArtifactLangTags failed to find a languageTag for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`, allTitlesJsonEscaped \`${allTitlesJsonEscaped}\`.`
             );
             return; // continue
         } else {
