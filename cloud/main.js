@@ -1,5 +1,6 @@
 /* eslint-disable no-undef */
 require("./emails.js"); // allows email-specific could functions to be defined
+require("./utility.js"); // utility functions which don't belong in the main file
 
 // This function will call save on every book. This is useful for
 // applying the functionality in beforeSaveBook to every book,
@@ -10,7 +11,7 @@ Parse.Cloud.define("saveAllBooks", async (request) => {
     var query = new Parse.Query("books");
     query.select("objectId");
     await query.each((book) => {
-        book.set("updateSource", "saveAllBooks"); // very important so we don't add system:incoming tag
+        book.set("updateSource", "saveAllBooks"); // very important that we don't leave updateSource unset so we don't add system:incoming tag
         try {
             return book.save(null, { useMasterKey: true });
         } catch (error) {
