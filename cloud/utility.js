@@ -10,9 +10,10 @@ Parse.Cloud.define("setArtifactLangTags", async (request) => {
         request.log.info("setArtifactLangTags - Dry run only.");
     }
 
-    // Query for all books
     // eslint-disable-next-line no-undef
     var query = new Parse.Query("books");
+    // Query for all books whose most recent update wasn't to run this utility.
+    query.notEqualTo("updateSource", "setArtifactLangTags");
     query.select("title", "allTitles", "show");
     await query.each((book) => {
         book.set("updateSource", "setArtifactLangTags"); // very important that we don't leave updateSource unset so we don't add system:incoming tag
@@ -62,22 +63,21 @@ Parse.Cloud.define("setArtifactLangTags", async (request) => {
         if (allTitlesKeys.length === 1) {
             // Only one entry in allTitles; take the easy, quick out and use it.
             setShowLangTag(book, allTitlesKeys[0], dryRun, request);
-            return;
-        }
-
-        const languageTags = getKeysByValue(allTitles, title);
-        if (languageTags.length > 1) {
-            request.log.info(
-                `setArtifactLangTags found multiple languageTags for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`.`
-            );
-            return; // continue
-        } else if (languageTags.length === 0) {
-            request.log.info(
-                `setArtifactLangTags failed to find a languageTag for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`.`
-            );
-            return; // continue
         } else {
-            setShowLangTag(book, languageTags[0], dryRun, request);
+            const languageTags = getKeysByValue(allTitles, title);
+            if (languageTags.length > 1) {
+                request.log.info(
+                    `setArtifactLangTags found multiple languageTags for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`.`
+                );
+                return; // continue
+            } else if (languageTags.length === 0) {
+                request.log.info(
+                    `setArtifactLangTags failed to find a languageTag for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`.`
+                );
+                return; // continue
+            } else {
+                setShowLangTag(book, languageTags[0], dryRun, request);
+            }
         }
 
         try {

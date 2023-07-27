@@ -253,7 +253,7 @@ function updateHasBloomPub(book) {
 Parse.Cloud.beforeSave(
     "books",
     function (request) {
-        console.log("entering bloom-parse-server main.js beforeSave books");
+        // console.log("entering bloom-parse-server main.js beforeSave books");
 
         const book = request.object;
         updateHasBloomPub(book);
@@ -444,18 +444,18 @@ Parse.Cloud.afterSave("books", async (request) => {
         var updatedAt = request.object.get("updatedAt");
         var objectExisted = createdAt.getTime() != updatedAt.getTime();
 
-        console.log(
-            "afterSave email handling request.object.existed():" +
-                request.object.existed()
-        );
-        console.log(
-            "afterSave email handling createdAt:" +
-                createdAt +
-                " updatedAt:" +
-                updatedAt +
-                " objectExisted:" +
-                objectExisted
-        );
+        // console.log(
+        //     "afterSave email handling request.object.existed():" +
+        //         request.object.existed()
+        // );
+        // console.log(
+        //     "afterSave email handling createdAt:" +
+        //         createdAt +
+        //         " updatedAt:" +
+        //         updatedAt +
+        //         " objectExisted:" +
+        //         objectExisted
+        // );
         if (!objectExisted) {
             var emailer = require("./emails.js");
             await emailer.sendEmailAboutNewBookAsync(book);
