@@ -5,8 +5,8 @@
 Parse.Cloud.define("setArtifactLangTags", async (request) => {
     request.log.info("setArtifactLangTags - Starting.");
 
-    const dryRun = request.params.dryrun;
-    if (dryRun === "true" || dryRun === true) {
+    const dryRun = request.params.dryrun === "true" || request.params.dryrun === true;
+    if (dryRun) {
         request.log.info("setArtifactLangTags - Dry run only.");
     }
 

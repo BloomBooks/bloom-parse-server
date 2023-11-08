@@ -295,10 +295,16 @@ Parse.Cloud.beforeSave(
             book.set("updateSource", newUpdateSource);
         }
         // As of April 2020, BloomDesktop 4.7 now sets the updateSource to "BloomDesktop {version}".
+        // In Bloom 5.6 (Oct 2023), we started uploading through an API.
+        // For book updates, updateSource behaves as previously. But for new books,
+        // the parse record creation is a two-step process. upload-start creates an empty record
+        // with updateSource="BloomDesktop via API". Then upload-finish fills in the record
+        // and includes updateSource="BloomDesktop {version} (new book)" so we can distinguish
+        // that type of new-book update from a real update.
         if (newUpdateSource.startsWith("BloomDesktop")) {
             // Change came from BloomDesktop upload (or reupload)
             book.addUnique("tags", "system:Incoming");
-            if (book.isNew()) {
+            if (book.isNew() || newUpdateSource.endsWith("(new book)")) {
                 book.set("harvestState", "New");
             } else {
                 book.set("harvestState", "Updated");
