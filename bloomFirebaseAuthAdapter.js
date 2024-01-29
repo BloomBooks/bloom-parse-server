@@ -1,6 +1,5 @@
-const Parse = require("parse/node").Parse;
-const httpsRequest = require("./httpsRequest");
-const jwt = require("jsonwebtoken");
+import jwt from "jsonwebtoken";
+import { get } from "./httpsRequest.js";
 
 // This adapter, modified from the 'apple' one in parse-server, validates a user when
 // presented with a valid, current firebase-auth token from the appropriate domain whose email
@@ -22,7 +21,7 @@ let currentKey;
 const getPublicKeys = async () => {
     let data;
     try {
-        data = await httpsRequest.get(TOKEN_ISSUER);
+        data = await get(TOKEN_ISSUER);
     } catch (e) {
         if (currentKey) {
             return currentKey;
@@ -49,7 +48,7 @@ const tryPublicKeys = (token, publicKeys) => {
             // and encypted with the given private key and returns it decoded.
             // It will fail appropriately if the token is expired.
             const jwtClaims = jwt.verify(token, publicKey, {
-                algorithms: "RS256"
+                algorithms: "RS256",
             });
             if (jwtClaims) {
                 return jwtClaims;
@@ -122,7 +121,7 @@ function validateAppId() {
     return Promise.resolve();
 }
 
-module.exports = {
+export default {
     validateAppId,
-    validateAuthData
+    validateAuthData,
 };

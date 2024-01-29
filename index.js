@@ -1,7 +1,8 @@
-const express = require("express");
-const ParseServer = require("parse-server").ParseServer;
-const ParseDashboard = require("parse-dashboard");
-const BloomFirebaseAuthAdapter = require("./bloomFirebaseAuthAdapter");
+import express from "express";
+import { ParseServer } from "parse-server";
+import http from "http";
+import ParseDashboard from "parse-dashboard";
+import BloomFirebaseAuthAdapter from "./bloomFirebaseAuthAdapter.js";
 
 const databaseUri = process.env.DATABASE_URI || process.env.MONGODB_URI;
 
@@ -11,7 +12,9 @@ if (!databaseUri) {
 
 const serverConfig = {
     databaseURI: databaseUri || "mongodb://localhost:27017/dev",
-    cloud: process.env.CLOUD_CODE_MAIN || __dirname + "/cloud/main.js",
+    cloud: function () {
+        import("./cloud/main.js");
+    },
     appId: process.env.APP_ID || "myAppId",
     masterKey: process.env.MASTER_KEY || "123",
     readOnlyMasterKey: process.env.READ_ONLY_MASTER_KEY || "ro",
@@ -19,11 +22,10 @@ const serverConfig = {
 
     appName: process.env.APP_NAME || "BloomLibrary.org",
 
-    auth: { bloom: BloomFirebaseAuthAdapter },
+    auth: { bloom: { module: BloomFirebaseAuthAdapter, enabled: true } },
 
     allowClientClassCreation: false,
 };
-const api = new ParseServer(serverConfig);
 
 const dashboard = new ParseDashboard({
     apps: [
@@ -56,6 +58,12 @@ const dashboard = new ParseDashboard({
 
 const app = express();
 
+// Serve the Parse API on the /parse URL prefix
+const mountPath = process.env.PARSE_MOUNT || "/parse";
+const server = new ParseServer(serverConfig);
+await server.start();
+app.use(mountPath, server.app);
+
 // The main thing here is the google-site-verification meta tag.
 // This lets us access the site on the Google Search Console.
 app.get("/", function (req, res) {
@@ -67,14 +75,10 @@ app.get("/", function (req, res) {
     );
 });
 
-// Serve the Parse API on the /parse URL prefix
-const mountPath = process.env.PARSE_MOUNT || "/parse";
-app.use(mountPath, api);
-
 app.use("/dashboard", dashboard);
 
 const port = process.env.PORT || 1337;
-const httpServer = require("http").createServer(app);
+const httpServer = http.createServer(app);
 httpServer.listen(port, function () {
     console.log("bloom-parse-server running on port " + port + ".");
 });
