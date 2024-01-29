@@ -1,6 +1,5 @@
-/* eslint-disable no-undef */
-require("./emails.js"); // allows email-specific could functions to be defined
-require("./utility.js"); // utility functions which don't belong in the main file
+import "./emails.js"; // allows email-specific cloud functions to be defined
+import "./utility.js"; // utility functions which don't belong in the main file
 
 // This function will call save on every book. This is useful for
 // applying the functionality in beforeSaveBook to every book,

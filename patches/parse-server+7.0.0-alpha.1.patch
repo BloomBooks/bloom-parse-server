@@ -1,15 +1,15 @@
 diff --git a/node_modules/parse-server/lib/RestQuery.js b/node_modules/parse-server/lib/RestQuery.js
-index 8d1ff6b..135e614 100644
+index 1155c10..ab368d0 100644
 --- a/node_modules/parse-server/lib/RestQuery.js
 +++ b/node_modules/parse-server/lib/RestQuery.js
-@@ -200,8 +200,8 @@ function RestQuery(config, auth, className, restWhere = {}, restOptions = {}, cl
- RestQuery.prototype.execute = function (executeOptions) {
+@@ -242,8 +242,8 @@ _UnsafeRestQuery.prototype.execute = function (executeOptions) {
    return Promise.resolve().then(() => {
      return this.buildRestWhere();
--  }).then(() => {
--    return this.denyProtectedFields();
-+//   }).then(() => {
-+//     return this.denyProtectedFields();
    }).then(() => {
+-    return this.denyProtectedFields();
+-  }).then(() => {
++//     return this.denyProtectedFields();
++//   }).then(() => {
      return this.handleIncludeAll();
    }).then(() => {
+     return this.handleExcludeKeys();

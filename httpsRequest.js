@@ -1,11 +1,11 @@
-// helper file needed by bloomAuth0Adapater; copied from file required by apple authAdapter
-// in parser-server core code.
-const https = require("https");
+// This helper file is needed by bloomFirebaseAuthAdapter.
+// It was copied (and slightly modified) from a file required by apple authAdapter in parser-server core code.
+import https from "https";
 
 function makeCallback(resolve, reject, noJSON) {
-    return function(res) {
+    return function (res) {
         let data = "";
-        res.on("data", chunk => {
+        res.on("data", (chunk) => {
             data += chunk;
         });
         res.on("end", () => {
@@ -23,7 +23,7 @@ function makeCallback(resolve, reject, noJSON) {
     };
 }
 
-function get(options, noJSON = false) {
+export function get(options, noJSON = false) {
     return new Promise((resolve, reject) => {
         https
             .get(options, makeCallback(resolve, reject, noJSON))
@@ -31,7 +31,7 @@ function get(options, noJSON = false) {
     });
 }
 
-function request(options, postData) {
+export function request(options, postData) {
     return new Promise((resolve, reject) => {
         const req = https.request(options, makeCallback(resolve, reject));
         req.on("error", reject);
@@ -39,5 +39,3 @@ function request(options, postData) {
         req.end();
     });
 }
-
-module.exports = { get, request };

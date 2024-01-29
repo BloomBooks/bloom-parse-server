@@ -1,17 +1,18 @@
 {
-    "env": {
-        "commonjs": true,
-        "es6": true,
-        "node": true
-    },
     "extends": "eslint:recommended",
-    "globals": {
-        "Atomics": "readonly",
-        "SharedArrayBuffer": "readonly"
+    "env": {
+        "node": true,
+        "es6": true
     },
     "parserOptions": {
-        "ecmaVersion": 2018
+        "ecmaVersion": 2021,
+        "sourceType": "module",
+        "requireConfigFile": false
     },
+    "parser": "@babel/eslint-parser",
     "rules": {
+    },
+    "globals" : {
+        "Parse" : true
     }
 }
