@@ -105,7 +105,7 @@ function sendEmailAboutBookAsync(
             };
             Object.assign(/*target=*/ data, /*source=*/ dataForEmailClientJson);
 
-            const mailgun = require("mailgun-js");
+            const mailgun = import("mailgun-js");
             const mg = mailgun({
                 apiKey: process.env.MAILGUN_API_KEY,
                 domain: "bloomlibrary.org",
