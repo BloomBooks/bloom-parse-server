@@ -47,7 +47,7 @@ Parse.Cloud.define("testBookSaved", async () => {
 
 // Send an email to notify about a newly created book.
 // It is sent to an internal address, set by environment variable EMAIL_BOOK_EVENT_RECIPIENT on the server.
-exports.sendEmailAboutNewBookAsync = async (parseBook) => {
+export const sendEmailAboutNewBookAsync = async (parseBook) => {
     var bookId = parseBook.id;
     var query = new Parse.Query("books");
     query.equalTo("objectId", bookId);
