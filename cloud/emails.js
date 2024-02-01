@@ -47,7 +47,7 @@ Parse.Cloud.define("testBookSaved", async () => {
 
 // Send an email to notify about a newly created book.
 // It is sent to an internal address, set by environment variable EMAIL_BOOK_EVENT_RECIPIENT on the server.
-export const sendEmailAboutNewBookAsync = async (parseBook) => {
+exports.sendEmailAboutNewBookAsync = async (parseBook) => {
     var bookId = parseBook.id;
     var query = new Parse.Query("books");
     query.equalTo("objectId", bookId);
@@ -105,7 +105,7 @@ function sendEmailAboutBookAsync(
             };
             Object.assign(/*target=*/ data, /*source=*/ dataForEmailClientJson);
 
-            const mailgun = import("mailgun-js");
+            const mailgun = require("mailgun-js");
             const mg = mailgun({
                 apiKey: process.env.MAILGUN_API_KEY,
                 domain: "bloomlibrary.org",

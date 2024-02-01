@@ -1,5 +1,5 @@
-import jwt from "jsonwebtoken";
-import { get as httpGet } from "./httpsRequest.js";
+const httpsRequest = require("./httpsRequest");
+const jwt = require("jsonwebtoken");
 
 // This adapter, modified from the 'apple' one in parse-server, validates a user when
 // presented with a valid, current firebase-auth token from the appropriate domain whose email
@@ -21,7 +21,7 @@ let currentKey;
 const getPublicKeys = async () => {
     let data;
     try {
-        data = await httpGet(TOKEN_ISSUER);
+        data = await httpsRequest.get(TOKEN_ISSUER);
     } catch (e) {
         if (currentKey) {
             return currentKey;
@@ -121,7 +121,7 @@ function validateAppId() {
     return Promise.resolve();
 }
 
-export default {
+module.exports = {
     validateAppId,
     validateAuthData,
 };

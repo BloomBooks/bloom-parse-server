@@ -10,6 +10,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "lint": "eslint --cache ./cloud && eslint --cache index.js",
     "postinstall": "patch-package"
   },
   "// mailgun-js is deprecated; we should replace it with officially-supported mailgun.js": " ",
@@ -21,7 +22,6 @@
     "parse-server": "7.0.0-alpha.1",
     "patch-package": "8.0.0"
   },
-  "type": "module",
   "devDependencies": {
     "@babel/eslint-parser": "7.21.3",
     "eslint": "8.38.0",
