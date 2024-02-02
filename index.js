@@ -26,6 +26,7 @@ const serverConfig = {
 
     auth: { bloom: { module: BloomFirebaseAuthAdapter, enabled: true } },
 
+    enforcePrivateUsers: false,
     allowClientClassCreation: false,
 };
 
