@@ -28,6 +28,8 @@ const serverConfig = {
 
     masterKeyIps: process.env.MASTER_KEY_IPS || ["127.0.0.1", "::1"],
 
+    trustProxy: process.env.TRUST_PROXY || false,
+
     enforcePrivateUsers: false,
     allowClientClassCreation: false,
 };
