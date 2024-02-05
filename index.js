@@ -26,7 +26,9 @@ const serverConfig = {
 
     auth: { bloom: { module: BloomFirebaseAuthAdapter, enabled: true } },
 
-    masterKeyIps: process.env.MASTER_KEY_IPS || ["0.0.0.0/0", "::0"],
+    masterKeyIps: process.env.PARSE_SERVER_MASTER_KEY_IPS
+        ? process.env.PARSE_SERVER_MASTER_KEY_IPS.split(",")
+        : ["127.0.0.1", "::1"],
 
     enforcePrivateUsers: false,
     allowClientClassCreation: false,
