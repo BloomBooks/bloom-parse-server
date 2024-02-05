@@ -14,14 +14,16 @@ index 1155c10..ab368d0 100644
    }).then(() => {
      return this.handleExcludeKeys();
 diff --git a/node_modules/parse-server/lib/middlewares.js b/node_modules/parse-server/lib/middlewares.js
-index d488ac0..6b3dcaa 100644
+index d488ac0..2d5339d 100644
 --- a/node_modules/parse-server/lib/middlewares.js
 +++ b/node_modules/parse-server/lib/middlewares.js
-@@ -446,6 +446,7 @@ function handleParseErrors(err, req, res, next) {
-     }
-   } else {
-     log.error('Uncaught internal server error.', err, err.stack);
-+    log.error(JSON.stringify(req))
-     res.status(500);
-     res.json({
-       code: _node.default.Error.INTERNAL_SERVER_ERROR,
+@@ -59,6 +59,9 @@ const getBlockList = (ipRangeList, store) => {
+   return blockList;
+ };
+ const checkIp = (ip, ipRangeList, store) => {
++
++  if (ipRangeList.includes("0.0.0.0/0") && ipRangeList.includes("::0")) return true;
++
+   const incomingIpIsV4 = (0, _net.isIPv4)(ip);
+   const blockList = getBlockList(ipRangeList, store);
+   if (store.get(ip)) return true;

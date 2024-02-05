@@ -26,9 +26,6 @@ const serverConfig = {
 
     auth: { bloom: { module: BloomFirebaseAuthAdapter, enabled: true } },
 
-    // This is needed on Azure (along with enableXFF in web.config) so the app has access to the client IP.
-    trustProxy: true,
-
     enforcePrivateUsers: false,
     allowClientClassCreation: false,
 };
