@@ -13,3 +13,15 @@ index 1155c10..ab368d0 100644
      return this.handleIncludeAll();
    }).then(() => {
      return this.handleExcludeKeys();
+diff --git a/node_modules/parse-server/lib/middlewares.js b/node_modules/parse-server/lib/middlewares.js
+index d488ac0..6b3dcaa 100644
+--- a/node_modules/parse-server/lib/middlewares.js
++++ b/node_modules/parse-server/lib/middlewares.js
+@@ -446,6 +446,7 @@ function handleParseErrors(err, req, res, next) {
+     }
+   } else {
+     log.error('Uncaught internal server error.', err, err.stack);
++    log.error(JSON.stringify(req))
+     res.status(500);
+     res.json({
+       code: _node.default.Error.INTERNAL_SERVER_ERROR,
