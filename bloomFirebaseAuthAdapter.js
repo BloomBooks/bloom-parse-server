@@ -1,4 +1,3 @@
-const Parse = require("parse/node").Parse;
 const httpsRequest = require("./httpsRequest");
 const jwt = require("jsonwebtoken");
 
@@ -49,7 +48,7 @@ const tryPublicKeys = (token, publicKeys) => {
             // and encypted with the given private key and returns it decoded.
             // It will fail appropriately if the token is expired.
             const jwtClaims = jwt.verify(token, publicKey, {
-                algorithms: "RS256"
+                algorithms: "RS256",
             });
             if (jwtClaims) {
                 return jwtClaims;
@@ -124,5 +123,5 @@ function validateAppId() {
 
 module.exports = {
     validateAppId,
-    validateAuthData
+    validateAuthData,
 };

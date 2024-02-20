@@ -3,5 +3,6 @@
     "bloomlibrary",
     "mailgun",
     "rebrand"
-  ]
+  ],
+  "editor.formatOnSave": true
 }

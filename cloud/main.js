@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 require("./emails.js"); // allows email-specific could functions to be defined
 require("./utility.js"); // utility functions which don't belong in the main file
 

@@ -1,11 +1,11 @@
-// helper file needed by bloomAuth0Adapater; copied from file required by apple authAdapter
-// in parser-server core code.
+// This helper file is needed by bloomFirebaseAuthAdapter.
+// It was copied (and slightly modified) from a file required by apple authAdapter in parser-server core code.
 const https = require("https");
 
 function makeCallback(resolve, reject, noJSON) {
-    return function(res) {
+    return function (res) {
         let data = "";
-        res.on("data", chunk => {
+        res.on("data", (chunk) => {
             data += chunk;
         });
         res.on("end", () => {

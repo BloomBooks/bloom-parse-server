@@ -1,0 +1,29 @@
+diff --git a/node_modules/parse-server/lib/RestQuery.js b/node_modules/parse-server/lib/RestQuery.js
+index 1155c10..ab368d0 100644
+--- a/node_modules/parse-server/lib/RestQuery.js
++++ b/node_modules/parse-server/lib/RestQuery.js
+@@ -242,8 +242,8 @@ _UnsafeRestQuery.prototype.execute = function (executeOptions) {
+   return Promise.resolve().then(() => {
+     return this.buildRestWhere();
+   }).then(() => {
+-    return this.denyProtectedFields();
+-  }).then(() => {
++//     return this.denyProtectedFields();
++//   }).then(() => {
+     return this.handleIncludeAll();
+   }).then(() => {
+     return this.handleExcludeKeys();
+diff --git a/node_modules/parse-server/lib/middlewares.js b/node_modules/parse-server/lib/middlewares.js
+index d488ac0..2d5339d 100644
+--- a/node_modules/parse-server/lib/middlewares.js
++++ b/node_modules/parse-server/lib/middlewares.js
+@@ -59,6 +59,9 @@ const getBlockList = (ipRangeList, store) => {
+   return blockList;
+ };
+ const checkIp = (ip, ipRangeList, store) => {
++
++  if (ipRangeList.includes("0.0.0.0/0") && ipRangeList.includes("::0")) return true;
++
+   const incomingIpIsV4 = (0, _net.isIPv4)(ip);
+   const blockList = getBlockList(ipRangeList, store);
+   if (store.get(ip)) return true;
