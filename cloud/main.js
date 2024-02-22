@@ -449,19 +449,14 @@ Parse.Cloud.afterSave("books", async (request) => {
         var updatedAt = request.object.get("updatedAt");
         var objectExisted = createdAt.getTime() != updatedAt.getTime();
 
-        // console.log(
-        //     "afterSave email handling request.object.existed():" +
-        //         request.object.existed()
-        // );
-        // console.log(
-        //     "afterSave email handling createdAt:" +
-        //         createdAt +
-        //         " updatedAt:" +
-        //         updatedAt +
-        //         " objectExisted:" +
-        //         objectExisted
-        // );
-        if (!objectExisted) {
+        const updateSource = book.get("updateSource");
+        const shouldSendEmail =
+            // Old style upload, direct from BloomDesktop
+            (!objectExisted && updateSource !== "BloomDesktop via API") ||
+            // New style upload, via the API
+            updateSource.endsWith("(new book)");
+
+        if (shouldSendEmail) {
             var emailer = require("./emails.js");
             await emailer.sendEmailAboutNewBookAsync(book);
             request.log.info("Book saved email notice sent successfully.");
