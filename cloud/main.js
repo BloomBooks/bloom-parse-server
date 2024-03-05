@@ -20,6 +20,38 @@ Parse.Cloud.define("saveAllBooks", async (request) => {
     request.log.info("saveAllBooks - Completed successfully.");
 });
 
+// March 2024, we made the following fields have a default value so
+// we could increase the efficiency of our queries.
+// This function finds all the books which need to be updated
+// to have the default value and updates them.
+Parse.Cloud.define("updateDefaultBooleans", async (request) => {
+    request.log.info("updateDefaultBooleans - Starting.");
+
+    async function doUpdate(fieldName, defaultValue) {
+        var query = new Parse.Query("books");
+        query.doesNotExist(fieldName);
+        query.select("objectId");
+        await query.each((book) => {
+            book.set(fieldName, defaultValue);
+            book.set("updateSource", "updateDefaultBooleans"); // very important that we don't leave updateSource unset so we don't add system:incoming tag
+            try {
+                return book.save(null, { useMasterKey: true });
+            } catch (error) {
+                request.log.error(
+                    "updateDefaultBooleans - book.save failed: " + error
+                );
+            }
+        });
+    }
+
+    await doUpdate("inCirculation", true);
+    await doUpdate("rebrand", false);
+    await doUpdate("draft", false);
+
+    request.log.info("updateDefaultBooleans - Completed successfully.");
+    request.message("updateDefaultBooleans - Completed successfully.");
+});
+
 // A background job to populate usageCounts for languages.
 // Also delete any unused language records (previously a separate job: removeUnusedLanguages).
 // (tags processing was removed 4/2020 because we don't use the info)
