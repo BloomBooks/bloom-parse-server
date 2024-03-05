@@ -49,7 +49,6 @@ Parse.Cloud.define("updateDefaultBooleans", async (request) => {
     await doUpdate("draft", false);
 
     request.log.info("updateDefaultBooleans - Completed successfully.");
-    request.message("updateDefaultBooleans - Completed successfully.");
 });
 
 // A background job to populate usageCounts for languages.
