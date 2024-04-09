@@ -1,3 +1,21 @@
+diff --git a/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js b/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
+index 6ca8eb4..b79995e 100644
+--- a/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
++++ b/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
+@@ -808,6 +808,13 @@ class MongoStorageAdapter {
+     return Promise.resolve();
+   }
+   createTextIndexesIfNeeded(className, query, schema) {
++    // For some unknown reason, this code started failing in early 2024 (probably the upgrade to parse-server 7).
++    // It attempts to create the "search_text" index, but it fails because the index already exists.
++    // We can't see any way in which the relevant code has changed, and our index definition hasn't changed in years.
++    // Specifically, it seems to expect that our "search_text" index includes the "search" field,
++    // but is hasn't for years.
++    // Anyway, we don't need it to create the index, so we just skip this code as a hack.
++    return Promise.resolve();
+     for (const fieldName in query) {
+       if (!query[fieldName] || !query[fieldName].$text) {
+         continue;
 diff --git a/node_modules/parse-server/lib/RestQuery.js b/node_modules/parse-server/lib/RestQuery.js
 index 1155c10..ab368d0 100644
 --- a/node_modules/parse-server/lib/RestQuery.js
