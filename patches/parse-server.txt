@@ -10,3 +10,10 @@ middlewares.js:
 After upgrading to parse-server 7, we started getting an error when it tried to validate the master key because it was
 getting undefined for the clientIp. I ended up just working around this by making it accept anything, even undefined,
 if the master key was open to all IP addresses.
+
+
+
+MongoStorageAdapter.js:
+See comment in patch.
+We are hacking around a bug we don't understand where a newer parse-server
+is trying to create a text index which already exists and fails.
