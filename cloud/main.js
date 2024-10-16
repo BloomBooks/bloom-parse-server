@@ -171,6 +171,113 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
     request.message("Completed successfully.");
 });
 
+// A background job to populate the analytics_* fields in the books table.
+//
+// This is scheduled on Azure under bloom-library-maintenance-{prod|dev}-daily.
+// You can also run it manually via REST:
+// curl -X POST -H "X-Parse-Application-Id: <app ID>" -H "X-Parse-Master-Key: <master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/updateBookAnalytics
+Parse.Cloud.job("updateBookAnalytics", async (request) => {
+    request.log.info("updateBookAnalytics - Starting.");
+
+    function getConnectionInfo() {
+        return {
+            url: process.env.SERVER_URL + "/",
+            headers: {
+                "X-Parse-Application-Id": process.env.APP_ID,
+            },
+        };
+        // When testing locally, you'll need to override using something like
+        // return {
+        //     url: "https://dev-server.bloomlibrary.org/parse/",
+        //     headers: {
+        //         "X-Parse-Application-Id":
+        //             "yrXftBF6mbAuVu3fO6LnhCJiHxZPIdE7gl1DUVGR",
+        //     },
+        // };
+    }
+    function getNumberOrZero(value) {
+        if (!value) return 0;
+        const number = parseInt(value, 10);
+        return isNaN(number) ? 0 : number;
+    }
+
+    try {
+        const bloomApiUrl = "https://api.bloomlibrary.org/v1";
+        // "http://127.0.0.1:7071/v1"; // testing with a locally-run api
+
+        //Query the api for per-books stats for all books
+        const axios = require("axios");
+        const results = await axios.post(
+            `${bloomApiUrl}/stats/reading/per-book`,
+            {
+                filter: {
+                    parseDBQuery: {
+                        url: `${getConnectionInfo().url}classes/books`,
+                        method: "GET",
+                        options: {
+                            headers: getConnectionInfo().headers,
+                            params: {
+                                limit: 1000000,
+                                keys: "objectId,bookInstanceId",
+                            },
+                        },
+                    },
+                },
+            }
+        );
+
+        //Loop through all books, updating analytics
+        const bookQuery = new Parse.Query("books");
+        bookQuery.limit(1000000); // Default is 100. We want all of them.
+        bookQuery.select("bookInstanceId");
+        const books = await bookQuery.find();
+        books.forEach((book) => {
+            const { bookInstanceId } = book.attributes;
+            const bookStats = results.data.stats.find(
+                (bookStat) => bookStat.bookinstanceid === bookInstanceId
+            );
+            book.set(
+                "analytics_finishedCount",
+                getNumberOrZero(bookStats?.finished)
+            );
+            book.set(
+                "analytics_shellDownloads",
+                getNumberOrZero(bookStats?.shelldownloads)
+            );
+            book.set("updateSource", "updateBookAnalytics");
+        });
+
+        //Save all books
+        const successfulUpdates = await Parse.Object.saveAll(books, {
+            useMasterKey: true,
+        });
+        request.log.info(
+            `updateBookAnalytics - Updated analytics for ${successfulUpdates.length} books.`
+        );
+    } catch (error) {
+        if (error.code === Parse.Error.AGGREGATE_ERROR) {
+            error.errors.forEach((iError) => {
+                request.log.error(
+                    `Couldn't process ${iError.object.id} due to ${iError.message}`
+                );
+            });
+            request.log.error(
+                "updateBookAnalytics - Terminated unsuccessfully."
+            );
+            throw new Error("Terminated unsuccessfully.");
+        } else {
+            request.log.error(
+                "updateBookAnalytics - Terminated unsuccessfully with error: " +
+                    error
+            );
+            throw new Error("Terminated unsuccessfully with error: " + error);
+        }
+    }
+
+    request.log.info("updateBookAnalytics - Completed successfully.");
+    request.message("Completed successfully.");
+});
+
 // We are trying to determine if we should delete a language record
 // which is not in use. But we also don't want to delete something which was newly created
 // and for which the corresponding book record has not yet been created. See BL-11818.
@@ -626,6 +733,10 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "rebrand", type: "Boolean" },
                 // bloomPUBVersion is explained in BL-10720
                 { name: "bloomPUBVersion", type: "Number" },
+
+                // analytics_* fields are populated by the updateBookAnalytics job.
+                { name: "analytics_finishedCount", type: "Number" },
+                { name: "analytics_shellDownloads", type: "Number" },
             ],
         },
         {
