@@ -195,11 +195,52 @@ Parse.Cloud.job("updateBookAnalytics", async (request) => {
         //     },
         // };
     }
-    function getNumberOrZero(value) {
+    function getNumberOrZero(value, isDecimal = false) {
         if (!value) return 0;
+
+        if (isDecimal) {
+            const number = parseFloat(value);
+            return isNaN(number) ? 0 : number;
+        }
+
         const number = parseInt(value, 10);
         return isNaN(number) ? 0 : number;
     }
+    // key/value pairs of column names to analytics stats results metadata
+    const statsColumnsMap = {
+        analytics_startedCount: {
+            apiResultName: "started",
+        },
+        analytics_finishedCount: {
+            apiResultName: "finished",
+        },
+        analytics_shellDownloads: {
+            apiResultName: "shelldownloads",
+        },
+        analytics_pdfDownloads: {
+            apiResultName: "pdfdownloads",
+        },
+        analytics_epubDownloads: {
+            apiResultName: "epubdownloads",
+        },
+        analytics_bloompubDownloads: {
+            apiResultName: "bloompubdownloads",
+        },
+        analytics_questionsInBookCount: {
+            apiResultName: "numquestionsinbook",
+        },
+        analytics_quizzesTakenCount: {
+            apiResultName: "numquizzestaken",
+        },
+        analytics_meanQuestionsCorrectPct: {
+            apiResultName: "meanpctquestionscorrect",
+            isDecimal: true,
+        },
+        analytics_medianQuestionsCorrectPct: {
+            apiResultName: "medianpctquestionscorrect",
+            isDecimal: true,
+        },
+    };
 
     try {
         const bloomApiUrl = "https://api.bloomlibrary.org/v1";
@@ -236,14 +277,15 @@ Parse.Cloud.job("updateBookAnalytics", async (request) => {
             const bookStats = results.data.stats.find(
                 (bookStat) => bookStat.bookinstanceid === bookInstanceId
             );
-            book.set(
-                "analytics_finishedCount",
-                getNumberOrZero(bookStats?.finished)
-            );
-            book.set(
-                "analytics_shellDownloads",
-                getNumberOrZero(bookStats?.shelldownloads)
-            );
+            Object.keys(statsColumnsMap).forEach((columnName) => {
+                book.set(
+                    columnName,
+                    getNumberOrZero(
+                        bookStats?.[statsColumnsMap[columnName].apiResultName],
+                        statsColumnsMap[columnName].isDecimal || false
+                    )
+                );
+            });
             book.set("updateSource", "updateBookAnalytics");
         });
 
@@ -735,8 +777,16 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "bloomPUBVersion", type: "Number" },
 
                 // analytics_* fields are populated by the updateBookAnalytics job.
+                { name: "analytics_startCount", type: "Number" },
                 { name: "analytics_finishedCount", type: "Number" },
                 { name: "analytics_shellDownloads", type: "Number" },
+                { name: "analytics_pdfDownloads", type: "Number" },
+                { name: "analytics_epubDownloads", type: "Number" },
+                { name: "analytics_bloompubDownloads", type: "Number" },
+                { name: "analytics_questionsInBookCount", type: "Number" },
+                { name: "analytics_quizzesTakenCount", type: "Number" },
+                { name: "analytics_meanQuestionsCorrectPct", type: "Number" },
+                { name: "analytics_medianQuestionsCorrectPct", type: "Number" },
             ],
         },
         {
