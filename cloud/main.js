@@ -171,6 +171,199 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
     request.message("Completed successfully.");
 });
 
+// A background job to populate the analytics_* fields in our books table
+// from api.bloomlibrary.org/stats. Data comes from our postgresql analytics database populated from Segment.
+//
+// This is scheduled on Azure under bloom-library-maintenance-{prod|dev}-daily.
+// You can also run it manually via REST:
+// curl -X POST -H "X-Parse-Application-Id: <app ID>" -H "X-Parse-Master-Key: <master key>" -d "{}" https://bloom-parse-server-develop.azurewebsites.net/parse/jobs/updateBookAnalytics
+Parse.Cloud.job("updateBookAnalytics", async (request) => {
+    request.log.info("updateBookAnalytics - Starting.");
+
+    // api.bloomlibrary.org/stats looks up analytics based on a parse server query.
+    // The api needs the appropriate parse server url and key so it can call back to the right parse server
+    // instance to get the list of books we want data about from the postgresql database.
+    function getCurrentInstanceInfoForApiQuery() {
+        return {
+            url: process.env.SERVER_URL,
+            appId: process.env.APP_ID,
+        };
+        // But when testing locally, you need to explicitly set which environment you want
+        // to collect analytics data for. You'll need to override using something like
+        // return {
+        //     url: "https://dev-server.bloomlibrary.org/parse",
+        //     appId: "yrXftBF6mbAuVu3fO6LnhCJiHxZPIdE7gl1DUVGR",
+        // };
+    }
+    function getNumberOrZero(value, isDecimal = false) {
+        if (!value) return 0;
+
+        if (isDecimal) {
+            const number = parseFloat(value);
+            return isNaN(number) ? 0 : number;
+        }
+
+        const number = parseInt(value, 10);
+        return isNaN(number) ? 0 : number;
+    }
+    // key/value pairs of column names to analytics results metadata
+    const analyticsColumnsMap = {
+        analytics_startedCount: {
+            apiResultName: "started",
+        },
+        analytics_finishedCount: {
+            apiResultName: "finished",
+        },
+        analytics_shellDownloads: {
+            apiResultName: "shelldownloads",
+        },
+        analytics_pdfDownloads: {
+            apiResultName: "pdfdownloads",
+        },
+        analytics_epubDownloads: {
+            apiResultName: "epubdownloads",
+        },
+        analytics_bloompubDownloads: {
+            apiResultName: "bloompubdownloads",
+        },
+        analytics_questionsInBookCount: {
+            apiResultName: "numquestionsinbook",
+        },
+        analytics_quizzesTakenCount: {
+            apiResultName: "numquizzestaken",
+        },
+        analytics_meanQuestionsCorrectPct: {
+            apiResultName: "meanpctquestionscorrect",
+            isDecimal: true,
+        },
+        analytics_medianQuestionsCorrectPct: {
+            apiResultName: "medianpctquestionscorrect",
+            isDecimal: true,
+        },
+    };
+
+    try {
+        const bloomApiUrl = "https://api.bloomlibrary.org/v1";
+        // "http://127.0.0.1:7071/v1"; // testing with a locally-run api
+
+        // Query the api for per-books stats for all books.
+        // What is going on behind the scenes is actually somewhat convoluted.
+        // We give the api the query to run to get the parse books.
+        // It sends that list of books to the postgresql database to get the analytics data
+        // and returns it to us. It would be more efficient to ask the postgresql database
+        // ourselves, but the api endpoint already exists, and I didn't want to provide
+        // postgres connection information to the parse server.
+        const axios = require("axios");
+        const analyticsResults = await axios.post(
+            `${bloomApiUrl}/stats/reading/per-book`,
+            {
+                filter: {
+                    parseDBQuery: {
+                        url: `${
+                            getCurrentInstanceInfoForApiQuery().url
+                        }/classes/books`,
+                        method: "GET",
+                        options: {
+                            headers: {
+                                "X-Parse-Application-Id": `${
+                                    getCurrentInstanceInfoForApiQuery().appId
+                                }`,
+                            },
+                            params: {
+                                limit: 1000000, // Default is 100. We want all of them.
+                                keys: "objectId,bookInstanceId",
+                            },
+                        },
+                    },
+                },
+            }
+        );
+        const analyticsSourceData = analyticsResults.data.stats;
+
+        // Make a map of bookInstanceId to analytics data for efficiency
+        const bookInstanceIdToAnalyticsMap = {};
+        analyticsSourceData.forEach((bookAnalytics) => {
+            bookInstanceIdToAnalyticsMap[bookAnalytics.bookinstanceid] =
+                bookAnalytics;
+        });
+
+        // Get all the books in our parse database.
+        // If the analytics values need to be updated, push it into
+        // a new array of books to update.
+        const booksToUpdate = [];
+        const bookQuery = new Parse.Query("books");
+        bookQuery.limit(1000000); // Default is 100. We want all of them.
+        bookQuery.select("bookInstanceId", ...Object.keys(analyticsColumnsMap));
+
+        const allBooks = await bookQuery.find();
+        allBooks.forEach((book) => {
+            const bookAnalytics =
+                bookInstanceIdToAnalyticsMap[book.get("bookInstanceId")];
+
+            let bookNeedsUpdate = false;
+            Object.keys(analyticsColumnsMap).forEach((columnName) => {
+                const newValue = getNumberOrZero(
+                    bookAnalytics?.[
+                        analyticsColumnsMap[columnName].apiResultName
+                    ],
+                    analyticsColumnsMap[columnName].isDecimal || false
+                );
+
+                if (book.get(columnName) !== newValue) {
+                    book.set(columnName, newValue);
+                    bookNeedsUpdate = true;
+                }
+            });
+            if (bookNeedsUpdate) {
+                // Important to set updateSource for proper processing in beforeSave (see details there).
+                book.set("updateSource", "updateBookAnalytics");
+
+                booksToUpdate.push(book);
+            }
+        });
+
+        request.log.info("booksToUpdate", booksToUpdate);
+
+        //Save any books with updated analytics.
+        const successfulUpdates = await Parse.Object.saveAll(booksToUpdate, {
+            useMasterKey: true,
+        });
+        request.log.info(
+            `updateBookAnalytics - Updated analytics for ${successfulUpdates.length} books.`
+        );
+    } catch (error) {
+        if (error.code === Parse.Error.AGGREGATE_ERROR) {
+            const maxErrors = 20; // Don't blow up the log.
+            for (let i = 0; i < error.errors.length && i < maxErrors; i++) {
+                const iError = error.errors[i];
+                request.log.error(
+                    `Couldn't process ${iError.object.id} due to ${iError.message}`
+                );
+            }
+            if (error.errors.length > maxErrors) {
+                request.log.error(
+                    `${
+                        error.errors.length - maxErrors
+                    } more errors were suppressed.`
+                );
+            }
+            request.log.error(
+                "updateBookAnalytics - Terminated unsuccessfully."
+            );
+            throw new Error("Terminated unsuccessfully.");
+        } else {
+            request.log.error(
+                "updateBookAnalytics - Terminated unsuccessfully with error: " +
+                    error
+            );
+            throw new Error("Terminated unsuccessfully with error: " + error);
+        }
+    }
+
+    request.log.info("updateBookAnalytics - Completed successfully.");
+    request.message("Completed successfully.");
+});
+
 // We are trying to determine if we should delete a language record
 // which is not in use. But we also don't want to delete something which was newly created
 // and for which the corresponding book record has not yet been created. See BL-11818.
@@ -626,6 +819,18 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "rebrand", type: "Boolean" },
                 // bloomPUBVersion is explained in BL-10720
                 { name: "bloomPUBVersion", type: "Number" },
+
+                // analytics_* fields are populated by the updateBookAnalytics job.
+                { name: "analytics_startCount", type: "Number" },
+                { name: "analytics_finishedCount", type: "Number" },
+                { name: "analytics_shellDownloads", type: "Number" },
+                { name: "analytics_pdfDownloads", type: "Number" },
+                { name: "analytics_epubDownloads", type: "Number" },
+                { name: "analytics_bloompubDownloads", type: "Number" },
+                { name: "analytics_questionsInBookCount", type: "Number" },
+                { name: "analytics_quizzesTakenCount", type: "Number" },
+                { name: "analytics_meanQuestionsCorrectPct", type: "Number" },
+                { name: "analytics_medianQuestionsCorrectPct", type: "Number" },
             ],
         },
         {

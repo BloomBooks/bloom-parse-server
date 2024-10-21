@@ -15,6 +15,7 @@
   },
   "// mailgun-js is deprecated; we should replace it with officially-supported mailgun.js": " ",
   "dependencies": {
+    "axios": "^1.7.7",
     "express": "4.18.2",
     "jsonwebtoken": "9.0.2",
     "mailgun-js": "0.22.0",
