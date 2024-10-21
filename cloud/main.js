@@ -322,8 +322,6 @@ Parse.Cloud.job("updateBookAnalytics", async (request) => {
             }
         });
 
-        request.log.info("booksToUpdate", booksToUpdate);
-
         //Save any books with updated analytics.
         const successfulUpdates = await Parse.Object.saveAll(booksToUpdate, {
             useMasterKey: true,
