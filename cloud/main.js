@@ -802,7 +802,7 @@ Parse.Cloud.define("setupTables", async () => {
                 { name: "originalPublisher", type: "String" },
                 // The publisher's own identifier for this book (e.g. a catalog/SKU number the
                 // publisher uses to track it). E.g. for StoryWeaver, "sw-1234".
-                // Typically unset/empty rather than explicitly null.
+                // Unset/empty when the publisher has no such identifier for the book.
                 { name: "publisherBookId", type: "String" },
                 // This is a "perceptual hash" (http://phash.org/) of the image in the first bloom-imageContainer
                 // we find on the first page after any xmatter pages. We use this to suggest which books are
