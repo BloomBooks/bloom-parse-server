@@ -61,6 +61,10 @@ All decisions below were made by Andrew on **2026-07-06** while preparing this d
    match production — the smoke validation used 8.0.14 via mongodb-memory-server.
 4. **Add automated tests** and **retire `setupTables`** in favor of parse-server's built-in defined
    schemas (`schema.definitions` config). See §9 and §10.
+   *Revised 2026-07-06: the vitest harness is deferred — the Phase 1 upgrade deploys to
+   unittest/develop first, validated by the smoke checks and manual Azure flows. Build the harness
+   later, at latest alongside the defined-schemas work (§10), where a fast local iteration loop
+   against disposable MongoDB 8 databases matters most.*
 5. **Keep the email-query patch, re-based** onto 9.9.0. This preserves today's exact behavior:
    clients can *query* on `_User.email` but email values are still stripped from responses.
    Rejected alternatives:
@@ -328,7 +332,10 @@ The forced core only:
 3. Repeat for `master` → production. **Rollback** at any point = swap the slots back, which reverts
    code and the Node/IP settings atomically (same non-slot-setting mechanic).
 
-## 9. Test harness (Track A)
+## 9. Test harness (Track A — deferred; see decision #4)
+
+Not a gate for the initial unittest/develop/production deploys; build before or alongside the
+defined-schemas migration (§10).
 
 **Stack:** vitest + `mongodb-memory-server` (spins up a real mongod per run; pin its binary to
 8.0.x to match production). A `spec/` or `tests/` directory, `npm test` script, and a helper that
