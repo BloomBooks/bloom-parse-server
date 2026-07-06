@@ -1,19 +1,35 @@
+This file documents why we patch parse-server (via patch-package, run automatically by
+the postinstall script). See UPGRADE-PLAN.md for the full history and upstream citations.
+
+As of the 9.9.0 upgrade (July 2026), we carry TWO patches. A third patch we used to carry
+against middlewares.js (checkIp accepting an undefined client IP) was dropped: it turned out
+to be a config-spelling problem. parse-server recognizes "::/0" (or "::") as allow-all-IPv6
+but NOT "::0", which is what our PARSE_SERVER_MASTER_KEY_IPS setting contained. The fix is
+using "0.0.0.0/0,::/0" in that Azure app setting instead of patching.
+
+
 RestQuery.js:
-In parse-server 5.2.5, they made a security "fix" to prevent searching on user email (among other fields).
-See https://github.com/parse-community/parse-server/blob/6.0.0/changelogs/CHANGELOG_release.md#525-2022-09-02.
-We decided to just allow this "security hole," thus I've made the simplest change to prevent the check, commenting two lines.
+In parse-server 5.2.5, they made a security "fix" to prevent searching on user email (among
+other protected fields). See
+https://github.com/parse-community/parse-server/blob/6.0.0/changelogs/CHANGELOG_release.md#525-2022-09-02.
+We decided to just allow this "security hole," thus we comment out the denyProtectedFields()
+step. Email values are still stripped from responses to non-master clients; this only allows
+querying on the field.
 
-Maybe some day parse-server will allow for this to be configurable. Or maybe we will even submit a PR.
-
-
-middlewares.js:
-After upgrading to parse-server 7, we started getting an error when it tried to validate the master key because it was
-getting undefined for the clientIp. I ended up just working around this by making it accept anything, even undefined,
-if the master key was open to all IP addresses.
-
+Why not config instead? Setting protectedFields: { _User: { '*': [] } } would also make email
+READABLE by anyone (we set enforcePrivateUsers: false), which is worse than today. The clean
+long-term fix is a cloud function doing the lookup with the master key, but that requires
+client changes. Decision recorded 2026-07-06 in UPGRADE-PLAN.md.
 
 
 MongoStorageAdapter.js:
-See comment in patch.
-We are hacking around a bug we don't understand where a newer parse-server
-is trying to create a text index which already exists and fails.
+We no-op createTextIndexesIfNeeded(). Root cause: our actual search_text Mongo text index
+does not include the "search" field in its weights, so the _SCHEMA metadata entry has no
+"search" key; parse-server's guard falls through and it tries to (re)create the index, which
+throws "Index search_text exists, cannot update." (Parse error 102; the code only catches raw
+Mongo error 85). Unchanged upstream through 9.9.0; tracked at
+https://github.com/parse-community/parse-server/issues/5084.
+
+Proper fixes we could do instead of this patch (see UPGRADE-PLAN.md 5.3): fix the _SCHEMA
+_metadata.indexes entry to include search, or rebuild the Mongo index with "search" in its
+weights (changes full-text ranking; needs care).

@@ -30,6 +30,12 @@ const serverConfig = {
         ? process.env.PARSE_SERVER_MASTER_KEY_IPS.split(",")
         : ["127.0.0.1", "::1"],
 
+    // The read-only master key is used by the dashboard's readonly user, which can come from
+    // any IP. parse-server 10 will change the default to localhost-only (DEPPS15), so set it
+    // explicitly. Note: "::/0" is the spelling parse-server recognizes as allow-all-IPv6;
+    // "::0" is NOT recognized (see UPGRADE-PLAN.md 5.1).
+    readOnlyMasterKeyIps: ["0.0.0.0/0", "::/0"],
+
     enforcePrivateUsers: false,
     allowClientClassCreation: false,
 };

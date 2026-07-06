@@ -157,13 +157,15 @@ Parse.Cloud.job("updateLanguageRecords", async (request) => {
             request.log.error(
                 "updateLanguageRecords - Terminated unsuccessfully."
             );
-            throw new Error("Terminated unsuccessfully.");
+            throw new Error("Terminated unsuccessfully.", { cause: error });
         } else {
             request.log.error(
                 "updateLanguageRecords - Terminated unsuccessfully with error: " +
                     error
             );
-            throw new Error("Terminated unsuccessfully with error: " + error);
+            throw new Error("Terminated unsuccessfully with error: " + error, {
+                cause: error,
+            });
         }
     }
 
@@ -348,13 +350,15 @@ Parse.Cloud.job("updateBookAnalytics", async (request) => {
             request.log.error(
                 "updateBookAnalytics - Terminated unsuccessfully."
             );
-            throw new Error("Terminated unsuccessfully.");
+            throw new Error("Terminated unsuccessfully.", { cause: error });
         } else {
             request.log.error(
                 "updateBookAnalytics - Terminated unsuccessfully with error: " +
                     error
             );
-            throw new Error("Terminated unsuccessfully with error: " + error);
+            throw new Error("Terminated unsuccessfully with error: " + error, {
+                cause: error,
+            });
         }
     }
 

@@ -6,7 +6,7 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
 ### Set Up For Local Development
 
-1. Make sure you have Node 16.13.
+1. Make sure you have Node 22 (or 24; see the engines field in package.json).
 
    `node --version`
 
@@ -14,7 +14,7 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
    `npm install`
 
-1. Install mongodb server
+1. Install mongodb server (version 7.0.16 or later; parse-server 9 requires it)
 
 1. Give mongodb a blank directory to work with (create it first if it doesn't exist), and run it:
 
@@ -171,6 +171,17 @@ Each is backed by a single mongodb at mongodb.com. This is how they were made:
    - publicServerURL
 
      - probably obsolete now that we don't use the built-in email feature; currently the same as SERVER_URL
+
+   - PARSE_SERVER_MASTER_KEY_IPS
+
+     - "0.0.0.0/0,::/0" to allow master-key use from anywhere.
+     - Note: it must be `::/0`, not `::0`; parse-server does not recognize `::0` as allow-all
+       (see UPGRADE-PLAN.md 5.1 — this once broke master-key access entirely).
+
+   - WEBSITE_NODE_DEFAULT_VERSION
+
+     - the Node version the app service runs (22.22.2 as of July 2026).
+     - Not marked as a deployment-slot setting, so it travels with a slot swap.
 
 4. In the App Service's Deployment settings, add a slot for staging and point that staging app service at this github repository,
    with the appropriate branch. A few minutes later, parse-server will be running on the staging app service.
