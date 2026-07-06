@@ -14,7 +14,7 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
    `npm install`
 
-1. Install mongodb server (version 7.0.16 or later; parse-server 9 requires it)
+1. Install mongodb server (version 8.0.x, to match the live clusters)
 
 1. Give mongodb a blank directory to work with (create it first if it doesn't exist), and run it:
 

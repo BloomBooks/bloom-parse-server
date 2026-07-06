@@ -19,8 +19,8 @@
     "jsonwebtoken": "9.0.3",
     "mailgun.js": "13.2.0",
     "parse-dashboard": "9.1.1",
-    "parse-server": "9.9.0",
-    "patch-package": "8.0.0"
+    "parse-server": "8.6.84",
+    "patch-package": "8.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -28,6 +28,15 @@
     "globals": "^17.7.0",
     "mongodb-memory-server": "^11.2.0",
     "prettier": "3.9.4"
+  },
+  "// overrides: parse-server 8.x pins @parse/push-adapter 6.x, whose @parse/node-gcm dep": " ",
+  "// drags in critically-vulnerable request/form-data, and whose node-apn uses vulnerable": " ",
+  "// node-forge. We don't use push at all; adapter 8.4.0 (what parse-server 9 ships) fixes": " ",
+  "// both chains. ws <=8.20.1 has memory-disclosure/DoS advisories.": " ",
+  "overrides": {
+    "@parse/push-adapter": "8.4.0",
+    "ws": "^8.21.0",
+    "uuid": "^11.1.1"
   },
   "// On the server, node version is set in Configuration > Application settings > WEBSITE_NODE_DEFAULT_VERSION": " ",
   "// (22.22.2 as of July 2026; see UPGRADE-PLAN.md)": " ",

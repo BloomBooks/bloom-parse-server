@@ -1,7 +1,9 @@
 This file documents why we patch parse-server (via patch-package, run automatically by
 the postinstall script). See UPGRADE-PLAN.md for the full history and upstream citations.
 
-As of the 9.9.0 upgrade (July 2026), we carry TWO patches. A third patch we used to carry
+As of the 8.6.84 upgrade (July 2026; we initially targeted 9.9.0 but dropped back because
+9.9.0 stable has unpatched security advisories — see UPGRADE-PLAN.md decision #2), we carry
+TWO patches. A third patch we used to carry
 against middlewares.js (checkIp accepting an undefined client IP) was dropped: it turned out
 to be a config-spelling problem. parse-server recognizes "::/0" (or "::") as allow-all-IPv6
 but NOT "::0", which is what our PARSE_SERVER_MASTER_KEY_IPS setting contained. The fix is

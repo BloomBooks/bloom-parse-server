@@ -1,8 +1,8 @@
 diff --git a/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js b/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
-index d494654..d60dab1 100644
+index d4a7e56..0bce5ad 100644
 --- a/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
 +++ b/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
-@@ -974,6 +974,14 @@ class MongoStorageAdapter {
+@@ -901,6 +901,14 @@ class MongoStorageAdapter {
      return Promise.resolve();
    }
    createTextIndexesIfNeeded(className, query, schema) {
@@ -18,10 +18,10 @@ index d494654..d60dab1 100644
        if (!query[fieldName] || !query[fieldName].$text) {
          continue;
 diff --git a/node_modules/parse-server/lib/RestQuery.js b/node_modules/parse-server/lib/RestQuery.js
-index b54d1d1..ffbcabb 100644
+index 6ac0aa8..f1e2baf 100644
 --- a/node_modules/parse-server/lib/RestQuery.js
 +++ b/node_modules/parse-server/lib/RestQuery.js
-@@ -252,8 +252,8 @@ _UnsafeRestQuery.prototype.execute = function (executeOptions) {
+@@ -246,8 +246,8 @@ _UnsafeRestQuery.prototype.execute = function (executeOptions) {
    }).then(() => {
      return this.buildRestWhere();
    }).then(() => {

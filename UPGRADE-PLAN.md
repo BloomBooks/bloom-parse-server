@@ -26,7 +26,7 @@ security-patched software until that migration lands — or in case it never doe
 
 | Component | Current | Target | Jump |
 | --- | --- | --- | --- |
-| parse-server | 7.0.0-alpha.1 | **9.9.0** | 2+ majors (and off a pre-release) |
+| parse-server | 7.0.0-alpha.1 | **8.6.84** (revised from 9.9.0 — see decision #2) | 1+ major (and off a pre-release) |
 | Node.js | 18.x (16 allowed) | **22 LTS** | 2 LTS lines; 16/18/20 are all EOL |
 | parse-dashboard | 5.3.0 | 9.1.1 | 4 majors |
 | express | 4.18.2 | ^5.2.1 | 1 major (parse-server 8+ is Express 5 internally) |
@@ -45,8 +45,20 @@ All decisions below were made by Andrew on **2026-07-06** while preparing this d
    both a full modernization and a minimal upgrade, so the team can choose when scheduling the work.
 2. **Target parse-server 9.9.0** (latest stable). Rejected: 8.6.x — it already forces the two hard
    parts (Express 5, Node bump) while reaching EOL sooner; 7.5.4 — buys almost nothing.
+   **REVISED during Phase 1 (2026-07-06): ship 8.6.84 instead.** `npm audit` revealed that
+   parse-server 9.9.0 stable carries 9 security advisories (including two high-severity DoS issues
+   reachable on our public REST API: GHSA-38m6-82c8-4xfm pre-auth header-regex backtracking, and
+   GHSA-cgxm-vr2f-6fj8 deeply-nested query operators) whose fixes exist only in 9.9.1-alpha
+   pre-releases — pinning an alpha is exactly the situation this upgrade exists to escape.
+   8.6.84 is the fully patched, actively maintained previous-major stable; all our 9.x migration
+   work (Express 5, Node 22, patch shapes) carries over, and the later 8.6.x → 9.x bump is cheap
+   once a patched 9.x stable ships (every 9-only breaking change is unused or already satisfied
+   here). Rejected: staying on 9.9.0 (accepts two public DoS highs); pinning 9.9.1-alpha.13
+   (repeats the alpha-pin mistake).
 3. **MongoDB is not a blocker.** Atlas clusters are already on 7.x/8.x, satisfying 9.9.0's ≥7.0.16
    requirement. A pre-flight verify step is still included (§8, Phase 0).
+   *Update 2026-07-06: live clusters confirmed to run MongoDB 8; local smoke testing uses a
+   MongoDB 8.0.x binary via mongodb-memory-server to match. (8.6.84 requires ≥6.0.19/7.0.16/8.0.4.)*
 4. **Add automated tests** and **retire `setupTables`** in favor of parse-server's built-in defined
    schemas (`schema.definitions` config). See §9 and §10.
 5. **Keep the email-query patch, re-based** onto 9.9.0. This preserves today's exact behavior:
@@ -69,7 +81,21 @@ All decisions below were made by Andrew on **2026-07-06** while preparing this d
 9. **ESM conversion is in scope, as its own late phase** (§11). The Feb 2023 failure now has a
    plausible diagnosis and the Node 22 bump likely removes the blocker; a cheap feasibility spike
    will confirm before committing.
-10. **Selective re-alignment with upstream `parse-server-example`, staying JavaScript.** Upstream is
+10. **npm audit posture (added during Phase 1, 2026-07-06).** Original state: 35 vulnerabilities.
+    After `npm audit fix`, patch-package 8.0.1, the 8.6.84 move, and three npm `overrides`
+    (`@parse/push-adapter` 8.4.0 — parse-server 8.x pins 6.x whose node-gcm/node-apn chain carries
+    critical `request`/`form-data` and high `node-forge` advisories in push code we never use;
+    `ws` ^8.21.0; `uuid` ^11.1.1): **11 remain (3 high, 8 moderate, 0 critical), all with no
+    upstream fix available**, in two buckets we accept and document:
+    - `lodash` (direct dep of parse-server 8; advisories affect ALL released versions, no fix
+      exists; parse-server 9 dropped lodash — goes away at the future 9.x bump);
+    - parse-dashboard's prebuilt bundle (`markdown-it`/`linkify-it` high, `react-router` moderate —
+      npm overrides can't change prebuilt bundle code; dashboard sits behind master-key login);
+    - plus moderates with no fixed release (`follow-redirects`) or in unused subsystems
+      (`@apollo/server` 4 — GraphQL unused; google-cloud chain under firebase-admin — push unused).
+    Re-check `npm audit` at each future dependency bump; drop the overrides when parse-server
+    updates its own pins.
+11. **Selective re-alignment with upstream `parse-server-example`, staying JavaScript.** Upstream is
     now TypeScript + ESM + jasmine + Docker + semantic-release. We use it as a reference blueprint
     (ESM, index/config structure, test layout, CI ideas) but skip TypeScript, Docker, and
     semantic-release — converting 1000+ lines of cloud code to TS is poor ROI ahead of a possible
@@ -363,7 +389,7 @@ puts us on 22.14+.
 2. If green: after the dependency upgrade has soaked in production, convert `index.js`,
    `bloomFirebaseAuthAdapter.js`, `httpsRequest.js`, and the cloud code to ESM in a separate PR,
    using upstream parse-server-example's `index.ts`/`config.ts` structure as the blueprint (minus
-   TypeScript, per decision #10). parse-server 9 loads ESM cloud code via dynamic `import()`.
+   TypeScript, per decision #11). parse-server loads ESM cloud code via dynamic `import()`.
 3. If red: document the observed error in this file and defer; nothing else in this plan depends on it.
 
 ## 12. Follow-up: CI/CD modernization (documented only — decision #8)
