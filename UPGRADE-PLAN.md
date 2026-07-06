@@ -35,7 +35,7 @@ security-patched software until that migration lands — or in case it never doe
 | axios | ^1.7.7 | latest 1.x (1.18+) | minor bumps only |
 | jsonwebtoken | 9.0.2 | 9.0.3 | patch |
 | patch-package | 8.0.0 | keep | still needed (see §5) |
-| MongoDB (Atlas) | 7.x/8.x already | no change | 9.9.0 requires ≥7.0.16 ✓ |
+| MongoDB (Atlas) | **8.x (current live version)** | no change | 8.6.84 requires ≥8.0.4 on the 8.x line ✓ |
 
 ## 2. Decisions log
 
@@ -55,10 +55,10 @@ All decisions below were made by Andrew on **2026-07-06** while preparing this d
    once a patched 9.x stable ships (every 9-only breaking change is unused or already satisfied
    here). Rejected: staying on 9.9.0 (accepts two public DoS highs); pinning 9.9.1-alpha.13
    (repeats the alpha-pin mistake).
-3. **MongoDB is not a blocker.** Atlas clusters are already on 7.x/8.x, satisfying 9.9.0's ≥7.0.16
-   requirement. A pre-flight verify step is still included (§8, Phase 0).
-   *Update 2026-07-06: live clusters confirmed to run MongoDB 8; local smoke testing uses a
-   MongoDB 8.0.x binary via mongodb-memory-server to match. (8.6.84 requires ≥6.0.19/7.0.16/8.0.4.)*
+3. **MongoDB 8 is the target — it's what the live Atlas clusters run** (confirmed 2026-07-06).
+   Not a blocker for any parse-server version considered (8.6.84 requires ≥6.0.19/7.0.16/8.0.4;
+   9.x requires ≥7.0.16). All local development and testing should use a MongoDB 8.0.x binary to
+   match production — the smoke validation used 8.0.14 via mongodb-memory-server.
 4. **Add automated tests** and **retire `setupTables`** in favor of parse-server's built-in defined
    schemas (`schema.definitions` config). See §9 and §10.
 5. **Keep the email-query patch, re-based** onto 9.9.0. This preserves today's exact behavior:
@@ -138,7 +138,7 @@ filtered to what affects *this* repo:
 **Affects us:**
 
 - **Node floor**: 9.9.0 requires ≥20.19 / ≥22.13 / ≥24.11 → forces the Node 22 move (decision #6).
-- **MongoDB floor**: ≥7.0.16 → already satisfied (decision #3), but verify in Phase 0.
+- **MongoDB floor**: satisfied — live clusters run MongoDB 8 (decision #3).
 - **Express 4 → 5** (in 8.0.0): parse-server's release notes recommend hosts mount it in an
   Express 5 app. Our host routes are trivial, so bumping `express` to ^5 is low-effort. The main
   Express 5 breaking changes (route syntax, removed APIs) don't appear in `index.js`.
@@ -266,7 +266,8 @@ The forced core only:
 
 ### Phase 0 — Pre-flight ✅ COMPLETE (verified by Andrew, 2026-07-06)
 
-1. ✅ **MongoDB version verified** — all clusters meet parse-server 9.9.0's ≥7.0.16 requirement.
+1. ✅ **MongoDB version verified** — live clusters run MongoDB 8, above every parse-server floor
+   in play (8.6.84: ≥8.0.4 on the 8.x line; 9.x: ≥7.0.16).
 2. ✅ **`PARSE_SERVER_MASTER_KEY_IPS` is `0.0.0.0/0,::0` in every environment** — this confirms the
    §5.1 root cause exactly: `::0` is the one allow-all spelling parse-server does *not* recognize.
    The fix (change `::0` → `::/0`) applies to all environments.
@@ -298,7 +299,7 @@ The forced core only:
 
 ### Phase 2 — Local validation
 
-1. Run against a local mongod (7.x+ to match production floor): server boots, dashboard loads,
+1. Run against a local mongod (8.0.x to match production): server boots, dashboard loads,
    `functions/testDB`-style smoke checks.
 2. Track A: run the new vitest suite (§9).
 3. Manual checks: create/query a book with the master key; full-text search on `search` (exercises
@@ -329,8 +330,8 @@ The forced core only:
 
 ## 9. Test harness (Track A)
 
-**Stack:** vitest + `mongodb-memory-server` (spins up a real mongod per run; pin its binary version
-to ≥7.0 to match production). A `spec/` or `tests/` directory, `npm test` script, and a helper that
+**Stack:** vitest + `mongodb-memory-server` (spins up a real mongod per run; pin its binary to
+8.0.x to match production). A `spec/` or `tests/` directory, `npm test` script, and a helper that
 boots ParseServer on an ephemeral port with `cloud/main.js` loaded — upstream parse-server-example's
 `spec/` is the structural reference.
 
