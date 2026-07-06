@@ -112,8 +112,10 @@ All decisions below were made by Andrew on **2026-07-06** while preparing this d
 - **Azure App Service (Windows) + iisnode** (`web.config`). Node version comes from the
   `WEBSITE_NODE_DEFAULT_VERSION` app setting — confirmed **18.12.1 in all environments**
   (2026-07-06), not marked as a deployment-slot setting.
-- Three services — `bloom-parse-server-unittest`, `-develop`, `-production` — each deployed by a
-  Deployment Center sync ("App Service Build Service" / Kudu) to a staging slot, then a manual swap.
+- Three services, all deployed by Deployment Center sync ("App Service Build Service" / Kudu):
+  `bloom-parse-server-unittest` and `-develop` redeploy **directly** on pushes to the `develop`
+  branch (no staging slot); `-production` deploys from `master` to a staging slot
+  (`-production-staging`) followed by a manual swap.
 - Each service is backed by its own MongoDB Atlas cluster.
 - `postinstall` runs `patch-package`, applying `patches/parse-server+7.0.0-alpha.1.patch`.
 
@@ -249,7 +251,8 @@ Everything in Track B (§7), plus:
 The forced core only:
 
 1. parse-server 7.0.0-alpha.1 → 9.9.0.
-2. Node 22 (engines + `WEBSITE_NODE_DEFAULT_VERSION` in all six app services/slots).
+2. Node 22 (engines + `WEBSITE_NODE_DEFAULT_VERSION` on all app services: unittest, develop,
+   production, and the production staging slot).
 3. express → ^5 (recommended pairing with parse-server 8+; trivial here).
 4. Patch triage per §5 (drop one, re-base two).
 5. Azure app-setting fix: `PARSE_SERVER_MASTER_KEY_IPS` → `0.0.0.0/0,::/0`.
@@ -286,10 +289,12 @@ The forced core only:
    [BloomBooks/bloom-parser-server-schema](https://github.com/BloomBooks/bloom-parser-server-schema)
    remains the shareable home for schema history.)
 5. ✅ **`WEBSITE_NODE_DEFAULT_VERSION` is 18.12.1 in all environments and is _not_ marked as a
-   deployment-slot setting.** That's good news: non-slot settings travel *with* a swap. So the
-   rollout can set `22.22.2` on the **staging slot only**, deploy and verify there, and the swap
-   moves code + Node version to production atomically — and a swap-back reverts both together.
-   (Phases 3–4 below assume this mechanic.)
+   deployment-slot setting.** For **production** (the only service with a staging slot) that's
+   good news: non-slot settings travel *with* a swap, so the rollout can set `22.22.2` on the
+   staging slot only, deploy and verify there, and the swap moves code + Node version to
+   production atomically — and a swap-back reverts both together. For **unittest and develop**
+   (no slots, direct deploy from `develop`), the settings must simply be changed on the app
+   service *before* the branch merge that triggers the deploy.
 
 ### Phase 1 — Local upgrade
 
@@ -312,25 +317,29 @@ The forced core only:
 
 ### Phase 3 — unittest instance
 
-1. On **bloom-parse-server-unittest** first: set `WEBSITE_NODE_DEFAULT_VERSION` to `22.22.2` and fix
-   the `PARSE_SERVER_MASTER_KEY_IPS` spelling (`0.0.0.0/0,::/0`). Since these are not slot settings
-   (Phase 0 item 5), set them on whichever slot receives the deploy.
-2. Deploy the branch there (it auto-deploys from `develop`; either merge to a temp branch it watches
-   or point it at the upgrade branch).
+1. On **bloom-parse-server-unittest** first (no staging slot — it deploys directly from `develop`):
+   set `WEBSITE_NODE_DEFAULT_VERSION` to `22.22.2` and fix the `PARSE_SERVER_MASTER_KEY_IPS`
+   spelling (`0.0.0.0/0,::/0`) **before** merging anything to `develop`.
+2. Deploy the branch there. Note that merging to `develop` deploys to **both** unittest and the
+   develop service at once (both watch that branch), so to test on unittest alone first, point its
+   Deployment Center at the upgrade branch temporarily — and remember the develop service's app
+   settings (step 1) must be fixed before the actual merge.
 3. Run BloomDesktop and bloomlibrary.org test flows against it: upload a book, moderator edits,
    search, login, `sendConcernEmail`, run both jobs from the dashboard.
 4. This is also when the ESM feasibility spike (§11) can piggyback, since the Node version is now 22.
 
 ### Phase 4 — develop, then production
 
-1. Merge to `develop`; set `WEBSITE_NODE_DEFAULT_VERSION=22.22.2` and the fixed
-   `PARSE_SERVER_MASTER_KEY_IPS` on the **staging slot**; deploy there; verify (README deployment
-   steps); swap. Because these are not slot settings (Phase 0 item 5), the swap carries code and
-   settings to production together.
+1. Set `WEBSITE_NODE_DEFAULT_VERSION=22.22.2` and the fixed `PARSE_SERVER_MASTER_KEY_IPS` on the
+   **bloom-parse-server-develop** app service (no staging slot), then merge to `develop` — the
+   service redeploys automatically. **Rollback** on develop = revert the merge commit (redeploys
+   the old code) and restore the two app settings.
 2. Watch logs (App Service Log stream) for the first hours; the failure modes to watch for are master
    key rejections (§5.1 territory), text-index errors (§5.3), and login failures (authData changes).
-3. Repeat for `master` → production. **Rollback** at any point = swap the slots back, which reverts
-   code and the Node/IP settings atomically (same non-slot-setting mechanic).
+3. For `master` → production: set the two app settings on the **production staging slot**, let it
+   deploy, verify, then swap. Because they are not slot settings (Phase 0 item 5), the swap carries
+   code and settings to production together, and **rollback** = swap back, which reverts both
+   atomically.
 
 ## 9. Test harness (Track A — deferred; see decision #4)
 
@@ -410,10 +419,11 @@ natural next step. Recommended future shape:
 2. Auth to Azure via **OIDC federated credentials** (`azure/login` + an Entra service principal — no
    long-lived secrets in GitHub). Simpler alternative: a publish-profile secret (fine for a small
    team, but it's a rotatable credential).
-3. Deploy with `azure/webapps-deploy@v3`, `slot-name: staging`, per service. Windows App Services are
-   fully supported.
-4. The manual portal slot swap stays exactly as it is today (optionally automated later with
-   `az webapp deployment slot swap`).
+3. Deploy with `azure/webapps-deploy@v3`. For unittest/develop, deploy straight to the app service
+   (they have no slots); for production, deploy with `slot-name: staging`. Windows App Services
+   are fully supported.
+4. Production's manual portal slot swap stays exactly as it is today (optionally automated later
+   with `az webapp deployment slot swap`).
 
 Until then, note that Kudu builds run on the App Service itself and nothing gates a deploy — tests
 are a local-only tool.
@@ -432,7 +442,8 @@ are a local-only tool.
   BloomDesktop/bloomlibrary.org login sessions survive (they should re-present a fresh Firebase
   token, but verify).
 - ~~Slot-sticky app settings~~ **Resolved** (Phase 0 item 5): `WEBSITE_NODE_DEFAULT_VERSION` is not
-  a slot setting anywhere, so it swaps with the app — set it on staging, verify, swap; swap-back
+  a slot setting anywhere, so on production (the only service with a slot) it swaps with the app —
+  set it on staging, verify, swap; swap-back
   rolls it back.
 - **Gitignored schema exports in `schema/`**: kept out of git pending a review of whether publishing
   CLP/field details in a public repo is a security exposure. Decide their long-term home (likely the
