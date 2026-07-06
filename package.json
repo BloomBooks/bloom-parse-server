@@ -10,6 +10,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "smoke": "node scripts/smoke-server.js",
     "lint": "eslint --cache ./cloud && eslint --cache index.js",
     "postinstall": "patch-package"
   },
