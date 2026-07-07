@@ -341,10 +341,14 @@ The forced core only:
    code and settings to production together, and **rollback** = swap back, which reverts both
    atomically.
 
-## 9. Test harness (Track A — deferred; see decision #4)
+## 9. Test harness (Track A) — ✅ BUILT 2026-07-06 (branch test-harness-and-defined-schemas)
 
-Not a gate for the initial unittest/develop/production deploys; build before or alongside the
-defined-schemas migration (§10).
+`npm test` runs vitest; each spec file boots a real parse-server (cloud code + Firebase auth
+adapter) against its own in-memory MongoDB 8.0.14 and drives it over REST. 30 tests, ~15s:
+`tests/server.spec.js` (boot, setupTables, keys, both surviving patches), `tests/books.spec.js`
+(the beforeSave/afterSave business logic), `tests/auth.spec.js` (Firebase tokens faked with a
+local RSA keypair by patching `httpsRequest`), `tests/definedSchemas.spec.js` (§10 mechanism).
+Not a deploy gate for the Phase 1 rollout, but should run before every future change.
 
 **Stack:** vitest + `mongodb-memory-server` (spins up a real mongod per run; pin its binary to
 8.0.x to match production). A `spec/` or `tests/` directory, `npm test` script, and a helper that
@@ -369,21 +373,58 @@ users), BloomDesktop upload, bloomlibrary.org browse/search, both jobs, concern 
 
 ## 10. setupTables → defined schemas (Track A)
 
-Replace the dummy-object-saving `setupTables` cloud function with parse-server's supported
-[defined schemas](https://docs.parseplatform.org/defined-schema/guide/) (`schema` server option):
+**Status 2026-07-06: the mechanism is BUILT and tested; the per-environment rollout remains.**
 
-1. ✅ Live schema already exported from all three environments (Phase 0 item 4) into gitignored
-   files under `schema/`. Reconcile these against the snapshots in the private schema repo — the
-   July 2025 comment in main.js warns things have drifted; the live export is the source of truth.
-2. Author `schema.definitions` (likely a `schema.js` the private repo's per-environment data can feed)
-   including CLPs and indexes — which setupTables never handled.
-3. Roll out with the safe flags first: `strict: false`, `deleteExtraFields: false`,
-   `recreateModifiedFields: false`. Watch startup logs on unittest; tighten later and consider
-   `lockSchemas: true` to end ad-hoc dashboard edits.
-4. The `search_text` index is the natural place to apply the §5.3 proper fix (declare the index with
-   `search` in it, or at least reconcile the metadata).
-5. Once parity is confirmed on all environments, delete `setupTables` from `cloud/main.js` and update
-   the README instructions that reference it.
+What exists now (branch test-harness-and-defined-schemas):
+
+- `scripts/schema-export-to-definitions.js` converts a live schema export
+  (`GET /parse/schemas`) into `schema/definitions.json` (gitignored, like all `schema/*.json`).
+- `index.js` enables it only when `USE_DEFINED_SCHEMAS=true`, with the safe flags:
+  `strict: false`, `deleteExtraFields: false`, `recreateModifiedFields: false`,
+  `lockSchemas: false`, and `keepUnknownIndexes: true`.
+- Verified end-to-end: a fresh database booted from prod-export-derived definitions gets all 12
+  classes (82 custom books fields) and the cloud code works against it
+  (`tests/definedSchemas.spec.js`, plus a manual `USE_DEFINED_SCHEMAS=true npm run smoke`).
+
+**Deliberate design decisions (made 2026-07-06, review welcome):**
+
+1. **Indexes are NOT managed by defined schemas.** Two reasons: the export's index metadata uses
+   raw Mongo key names (`_p_uploader`, `_rperm`, `_created_at`) that can't round-trip through the
+   schema API, and the `books.search_text` text index is the exact minefield behind our
+   MongoStorageAdapter patch (§5.3). `keepUnknownIndexes: true` (a documented parse-server option
+   built for "adding indexes manually") stops the migrator from deleting the live indexes it
+   doesn't know about. Index management stays manual — the same posture setupTables had.
+   Consequence: bootstrapping a brand-new environment creates no indexes; they'd be copied
+   manually.
+2. **`_Session` is excluded** (parse-server manages it); `_User`/`_Role` are included so their
+   CLPs are managed, with parse-server's built-in fields stripped from the definitions.
+3. **CLPs are carried over verbatim from the export**, so enabling defined schemas changes
+   nothing about live permissions. Whether the current CLPs are what we *want* is a separate
+   security review, tracked in a gitignored note under `schema/` (deliberately not in this file).
+4. **`USE_DEFINED_SCHEMAS` is opt-in per environment** so the rollout can go unittest → develop →
+   production, and turning it off is just unsetting an app setting.
+5. **definitions.json stays gitignored** for the same reason as the schema exports (possible
+   security exposure of CLP details — still an open question). Each environment generates its own
+   from its own export. If the security review concludes it's fine to commit, committing it would
+   give reviewable schema history in git — revisit then.
+
+**Remaining rollout steps:**
+
+1. ✅ Live schema exported from all three environments (Phase 0 item 4) into gitignored files
+   under `schema/`. ✅ Converter + opt-in server wiring built and tested (see status above).
+2. Per environment (unittest first): re-export the live schema fresh (it may have drifted since
+   the Phase 0 export), run `node scripts/schema-export-to-definitions.js <export> schema/definitions.json`,
+   deploy `definitions.json` alongside the code, set `USE_DEFINED_SCHEMAS=true`, and watch the
+   startup log for "Running Migrations Completed". Diff `GET /parse/schemas` before/after — with
+   the safe flags, the only legitimate diffs are additions.
+3. Reconcile the three environments' definitions against each other and the private schema repo —
+   the July 2025 comment in main.js warns they've drifted; decide what the canonical schema is.
+4. Consider `lockSchemas: true` after the diff settles, to end ad-hoc dashboard edits.
+5. The `search_text` index remains the place to apply the §5.3 proper fix someday — deliberately
+   NOT part of this mechanism (indexes are unmanaged; see design decision 1 above).
+6. Once parity is confirmed on all environments, delete `setupTables` from `cloud/main.js` and
+   update the README instructions that reference it. (Not done yet — the function and its tests
+   still exist and still pass.)
 
 This also directly serves the Supabase plan: `supabase/overview.md` maps "setupTables → SQL
 migrations", and a reconciled, declarative schema is a far better migration input than the drifted

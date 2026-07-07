@@ -20,24 +20,39 @@ afterAll(async () => {
 
 describe("server basics", () => {
     it("answers serverInfo with the expected parse-server version", async () => {
-        const { status, json } = await rest(server.serverURL, "GET", "/serverInfo", {
-            master: true,
-        });
+        const { status, json } = await rest(
+            server.serverURL,
+            "GET",
+            "/serverInfo",
+            {
+                master: true,
+            }
+        );
         expect(status).toBe(200);
         expect(json.parseServerVersion).toBe("8.6.84");
     });
 
     it("runs setupTables to completion (exercises all cloud beforeSave/afterSave hooks)", async () => {
-        const { status, json } = await runCloudFunction(server.serverURL, "setupTables");
+        const { status, json } = await runCloudFunction(
+            server.serverURL,
+            "setupTables"
+        );
         expect(status).toBe(200);
         expect(json.result).toBe("setupTables ran to completion.");
 
         // Classes exist now
-        const books = await rest(server.serverURL, "GET", "/classes/books", { master: true });
-        expect(books.status).toBe(200);
-        const version = await rest(server.serverURL, "GET", "/classes/version", {
+        const books = await rest(server.serverURL, "GET", "/classes/books", {
             master: true,
         });
+        expect(books.status).toBe(200);
+        const version = await rest(
+            server.serverURL,
+            "GET",
+            "/classes/version",
+            {
+                master: true,
+            }
+        );
         expect(version.status).toBe(200);
         expect(version.json.results[0].minDesktopVersion).toBe("2.0");
     });
@@ -56,9 +71,14 @@ describe("server basics", () => {
     });
 
     it("rejects writes to a nonexistent class without master key (allowClientClassCreation)", async () => {
-        const { status } = await rest(server.serverURL, "POST", "/classes/notARealClass", {
-            body: { foo: 1 },
-        });
+        const { status } = await rest(
+            server.serverURL,
+            "POST",
+            "/classes/notARealClass",
+            {
+                body: { foo: 1 },
+            }
+        );
         expect(status).toBeGreaterThanOrEqual(400);
     });
 });
@@ -67,8 +87,14 @@ describe("the _User email-query patch (RestQuery.js)", () => {
     it("allows querying _User on email without the master key", async () => {
         await createUser(server.serverURL, "emailquery@example.com");
 
-        const where = encodeURIComponent(JSON.stringify({ email: "emailquery@example.com" }));
-        const { status, json } = await rest(server.serverURL, "GET", `/classes/_User?where=${where}`);
+        const where = encodeURIComponent(
+            JSON.stringify({ email: "emailquery@example.com" })
+        );
+        const { status, json } = await rest(
+            server.serverURL,
+            "GET",
+            `/classes/_User?where=${where}`
+        );
         // Without the patch this is a 400 with Parse error 102
         // ("This user is not allowed to query email on class _User").
         expect(status).toBe(200);
@@ -76,7 +102,11 @@ describe("the _User email-query patch (RestQuery.js)", () => {
     });
 
     it("still strips email values from responses to non-master clients", async () => {
-        const { status, json } = await rest(server.serverURL, "GET", "/classes/_User");
+        const { status, json } = await rest(
+            server.serverURL,
+            "GET",
+            "/classes/_User"
+        );
         expect(status).toBe(200);
         expect(json.results.length).toBeGreaterThan(0);
         for (const user of json.results) {

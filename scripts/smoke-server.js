@@ -29,7 +29,9 @@ const path = require("path");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 
 (async () => {
-    console.log("[smoke] starting in-memory mongod (first run downloads the binary)...");
+    console.log(
+        "[smoke] starting in-memory mongod (first run downloads the binary)..."
+    );
     const mongod = await MongoMemoryServer.create({
         binary: { version: "8.0.14" },
     });

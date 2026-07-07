@@ -12,7 +12,7 @@
     "start": "node index.js",
     "test": "vitest run",
     "smoke": "node scripts/smoke-server.js",
-    "lint": "eslint --cache ./cloud && eslint --cache index.js",
+    "lint": "eslint --cache ./cloud ./scripts ./tests && eslint --cache index.js",
     "postinstall": "patch-package"
   },
   "dependencies": {

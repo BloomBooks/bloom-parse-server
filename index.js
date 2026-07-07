@@ -42,6 +42,30 @@ const serverConfig = {
     allowClientClassCreation: false,
 };
 
+// Opt-in schema management via parse-server's built-in "defined schemas" — the supported
+// replacement for the setupTables cloud function (see UPGRADE-PLAN.md 10).
+// To enable: generate schema/definitions.json from a live schema export using
+// scripts/schema-export-to-definitions.js, and set USE_DEFINED_SCHEMAS=true.
+// The flags below are the safe ones: only ADD missing classes/fields and apply CLPs;
+// never delete or rewrite fields, and never touch indexes (keepUnknownIndexes), which
+// remain manually managed just as they were under setupTables.
+if (process.env.USE_DEFINED_SCHEMAS === "true") {
+    // Deliberately let this throw if the file is missing: a deploy that asks for defined
+    // schemas but has no definitions is misconfigured and should fail loudly.
+    const definitions = require("./schema/definitions.json");
+    serverConfig.schema = {
+        definitions,
+        strict: false,
+        deleteExtraFields: false,
+        recreateModifiedFields: false,
+        lockSchemas: false,
+        keepUnknownIndexes: true,
+    };
+    console.log(
+        `Defined schemas enabled: managing ${definitions.length} classes from schema/definitions.json`
+    );
+}
+
 const dashboard = new ParseDashboard({
     apps: [
         {

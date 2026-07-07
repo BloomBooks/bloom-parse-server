@@ -26,4 +26,11 @@ module.exports = [
             "no-unused-vars": ["error", { args: "none" }],
         },
     },
+    {
+        // Test files are ES modules (vitest transforms them).
+        files: ["tests/**/*.js"],
+        languageOptions: {
+            sourceType: "module",
+        },
+    },
 ];

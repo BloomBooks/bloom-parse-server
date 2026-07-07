@@ -61,7 +61,10 @@ async function loginWithAuthData(id, token) {
 describe("bloom auth adapter", () => {
     it("signs up / logs in a user presenting a valid Firebase token", async () => {
         const email = "firebase-user@example.com";
-        const { status, json } = await loginWithAuthData(email, makeToken(email));
+        const { status, json } = await loginWithAuthData(
+            email,
+            makeToken(email)
+        );
         expect(status).toBe(201);
         expect(json.sessionToken).toBeDefined();
 
@@ -82,7 +85,9 @@ describe("bloom auth adapter", () => {
         const email = "wrong-issuer@example.com";
         const { status } = await loginWithAuthData(
             email,
-            makeToken(email, { iss: "https://securetoken.google.com/some-other-app" })
+            makeToken(email, {
+                iss: "https://securetoken.google.com/some-other-app",
+            })
         );
         expect(status).toBeGreaterThanOrEqual(400);
     });
@@ -97,7 +102,10 @@ describe("bloom auth adapter", () => {
     });
 
     it("rejects a garbage token", async () => {
-        const { status } = await loginWithAuthData("garbage@example.com", "not.a.jwt");
+        const { status } = await loginWithAuthData(
+            "garbage@example.com",
+            "not.a.jwt"
+        );
         expect(status).toBeGreaterThanOrEqual(400);
     });
 });
@@ -114,7 +122,9 @@ describe("bloomLink", () => {
             {} // no master key; called by the client after firebase login
         );
         expect(link.status).toBe(200);
-        expect(link.json.result).toBe("linked parse-server user by adding authData");
+        expect(link.json.result).toBe(
+            "linked parse-server user by adding authData"
+        );
 
         // Second call reports it's already linked
         const again = await runCloudFunction(server.serverURL, "bloomLink", {

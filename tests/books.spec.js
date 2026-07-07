@@ -13,7 +13,11 @@ let server;
 let uploader; // a test user whose pointer satisfies basicBookValidationRules
 
 function uploaderPointer() {
-    return { __type: "Pointer", className: "_User", objectId: uploader.objectId };
+    return {
+        __type: "Pointer",
+        className: "_User",
+        objectId: uploader.objectId,
+    };
 }
 
 let bookCounter = 0;
@@ -28,13 +32,21 @@ function newBookData(extra = {}) {
 }
 
 async function createBook(data, auth = { master: true }) {
-    return rest(server.serverURL, "POST", "/classes/books", { body: data, ...auth });
+    return rest(server.serverURL, "POST", "/classes/books", {
+        body: data,
+        ...auth,
+    });
 }
 
 async function getBook(objectId) {
-    const { json } = await rest(server.serverURL, "GET", "/classes/books/" + objectId, {
-        master: true,
-    });
+    const { json } = await rest(
+        server.serverURL,
+        "GET",
+        "/classes/books/" + objectId,
+        {
+            master: true,
+        }
+    );
     return json;
 }
 
@@ -58,7 +70,10 @@ describe("books beforeSave: validation", () => {
 describe("books beforeSave: tags and search", () => {
     it("prefixes bare tags with topic: and builds the search string", async () => {
         const { status, json } = await createBook(
-            newBookData({ title: "Dogs and Cats", tags: ["animals", "region:Asia"] })
+            newBookData({
+                title: "Dogs and Cats",
+                tags: ["animals", "region:Asia"],
+            })
         );
         expect(status).toBe(201);
         const book = await getBook(json.objectId);
@@ -91,7 +106,10 @@ describe("books beforeSave: updateSource and harvestState", () => {
 
     it("marks new BloomDesktop uploads with system:Incoming and harvestState New", async () => {
         const { json } = await createBook(
-            newBookData({ updateSource: "BloomDesktop 6.2", tags: ["topic:Math"] })
+            newBookData({
+                updateSource: "BloomDesktop 6.2",
+                tags: ["topic:Math"],
+            })
         );
         const book = await getBook(json.objectId);
         expect(book.tags).toContain("system:Incoming");
@@ -103,10 +121,15 @@ describe("books beforeSave: updateSource and harvestState", () => {
         const { json } = await createBook(
             newBookData({ updateSource: "BloomDesktop 6.2" })
         );
-        const update = await rest(server.serverURL, "PUT", "/classes/books/" + json.objectId, {
-            body: { updateSource: "BloomDesktop 6.2", title: "changed" },
-            master: true,
-        });
+        const update = await rest(
+            server.serverURL,
+            "PUT",
+            "/classes/books/" + json.objectId,
+            {
+                body: { updateSource: "BloomDesktop 6.2", title: "changed" },
+                master: true,
+            }
+        );
         expect(update.status).toBe(200);
         const book = await getBook(json.objectId);
         expect(book.harvestState).toBe("Updated");
@@ -117,7 +140,10 @@ describe("books beforeSave: moderator-edited fields survive re-upload", () => {
     it("keeps scalar fields the moderator set when the re-upload sends empty ones, and unions tags", async () => {
         // Original upload from BloomDesktop
         const { json } = await createBook(
-            newBookData({ updateSource: "BloomDesktop 6.2", tags: ["topic:Animals"] })
+            newBookData({
+                updateSource: "BloomDesktop 6.2",
+                tags: ["topic:Animals"],
+            })
         );
         // Moderator improves metadata (e.g. via the dashboard)
         await rest(server.serverURL, "PUT", "/classes/books/" + json.objectId, {
@@ -149,7 +175,9 @@ describe("books beforeSave: moderator-edited fields survive re-upload", () => {
 
 describe("books beforeSave: derived fields", () => {
     it("converts bookLineage CSV to bookLineageArray", async () => {
-        const { json } = await createBook(newBookData({ bookLineage: "aaa,bbb,ccc" }));
+        const { json } = await createBook(
+            newBookData({ bookLineage: "aaa,bbb,ccc" })
+        );
         const book = await getBook(json.objectId);
         expect(book.bookLineageArray).toEqual(["aaa", "bbb", "ccc"]);
     });
@@ -163,7 +191,9 @@ describe("books beforeSave: derived fields", () => {
 
     it("computes hasBloomPub with user opinion overriding harvester", async () => {
         const { json } = await createBook(
-            newBookData({ show: { bloomReader: { harvester: true, user: false } } })
+            newBookData({
+                show: { bloomReader: { harvester: true, user: false } },
+            })
         );
         expect((await getBook(json.objectId)).hasBloomPub).toBe(false);
     });
@@ -194,10 +224,17 @@ describe("books afterSave: tag records", () => {
         await createBook(newBookData({ tags: ["topic:BrandNewTopic"] }));
         // Tag creation is fire-and-forget inside afterSave; poll for it.
         const found = await eventually(async () => {
-            const where = encodeURIComponent(JSON.stringify({ name: "topic:BrandNewTopic" }));
-            const { json } = await rest(server.serverURL, "GET", `/classes/tag?where=${where}`, {
-                master: true,
-            });
+            const where = encodeURIComponent(
+                JSON.stringify({ name: "topic:BrandNewTopic" })
+            );
+            const { json } = await rest(
+                server.serverURL,
+                "GET",
+                `/classes/tag?where=${where}`,
+                {
+                    master: true,
+                }
+            );
             return json.results.length === 1 ? json.results[0] : null;
         });
         expect(found.name).toBe("topic:BrandNewTopic");

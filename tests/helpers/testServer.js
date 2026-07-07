@@ -10,16 +10,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const repoRoot = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    ".."
+);
 
 const express = require(path.join(repoRoot, "node_modules", "express"));
-const { ParseServer } = require(path.join(repoRoot, "node_modules", "parse-server"));
-const { MongoMemoryServer } = require(path.join(
-    repoRoot,
-    "node_modules",
-    "mongodb-memory-server"
-));
-const BloomFirebaseAuthAdapter = require(path.join(repoRoot, "bloomFirebaseAuthAdapter.js"));
+const { ParseServer } = require(
+    path.join(repoRoot, "node_modules", "parse-server")
+);
+const { MongoMemoryServer } = require(
+    path.join(repoRoot, "node_modules", "mongodb-memory-server")
+);
+const BloomFirebaseAuthAdapter = require(
+    path.join(repoRoot, "bloomFirebaseAuthAdapter.js")
+);
 
 export const APP_ID = "testAppId";
 export const MASTER_KEY = "testMasterKey";
@@ -98,7 +104,11 @@ export async function startTestServer({ schema, dbName = "test" } = {}) {
 
 // --- Small REST helpers (fetch is global on Node 22/24) ---
 
-export function headers({ master = false, readOnly = false, sessionToken } = {}) {
+export function headers({
+    master = false,
+    readOnly = false,
+    sessionToken,
+} = {}) {
     const h = {
         "X-Parse-Application-Id": APP_ID,
         "Content-Type": "application/json",
@@ -109,7 +119,12 @@ export function headers({ master = false, readOnly = false, sessionToken } = {})
     return h;
 }
 
-export async function rest(serverURL, method, pathname, { body, ...auth } = {}) {
+export async function rest(
+    serverURL,
+    method,
+    pathname,
+    { body, ...auth } = {}
+) {
     const response = await fetch(serverURL + pathname, {
         method,
         headers: headers(auth),
@@ -124,8 +139,16 @@ export async function rest(serverURL, method, pathname, { body, ...auth } = {}) 
     return { status: response.status, json };
 }
 
-export async function runCloudFunction(serverURL, name, params = {}, auth = { master: true }) {
-    return rest(serverURL, "POST", `/functions/${name}`, { body: params, ...auth });
+export async function runCloudFunction(
+    serverURL,
+    name,
+    params = {},
+    auth = { master: true }
+) {
+    return rest(serverURL, "POST", `/functions/${name}`, {
+        body: params,
+        ...auth,
+    });
 }
 
 // Creates a _User via the master key and returns { objectId, sessionToken, username }.
@@ -137,17 +160,26 @@ export async function createUser(serverURL, username, password = "secret123") {
     if (status !== 201) {
         throw new Error(`createUser failed: ${status} ${JSON.stringify(json)}`);
     }
-    return { objectId: json.objectId, sessionToken: json.sessionToken, username };
+    return {
+        objectId: json.objectId,
+        sessionToken: json.sessionToken,
+        username,
+    };
 }
 
 // Polls until fn() is truthy or the timeout elapses (for fire-and-forget afterSave work).
-export async function eventually(fn, { timeoutMs = 10000, intervalMs = 200 } = {}) {
+export async function eventually(
+    fn,
+    { timeoutMs = 10000, intervalMs = 200 } = {}
+) {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
         const result = await fn();
         if (result) return result;
         if (Date.now() > deadline) {
-            throw new Error("eventually: condition not met within " + timeoutMs + "ms");
+            throw new Error(
+                "eventually: condition not met within " + timeoutMs + "ms"
+            );
         }
         await new Promise((r) => setTimeout(r, intervalMs));
     }
