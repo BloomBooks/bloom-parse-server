@@ -127,14 +127,16 @@ A one-off deploy of any single service can be run from the GitHub Actions tab
 
 #### develop branch
 
-Changes pushed to the `develop` branch are deployed automatically by the workflow — there is no
-staging slot for these services; both go live as soon as their deploy job finishes:
+Changes pushed to the `develop` branch are deployed automatically by the workflow to
+**bloom-parse-server-develop** (no staging slot; it goes live when the deploy job finishes).
 
-- bloom-parse-server-unittest
-- bloom-parse-server-develop
+**bloom-parse-server-unittest** deploys only when triggered manually (GitHub Actions tab →
+"build-and-deploy" → Run workflow → target `unittest`). The two services share slow hardware,
+so they deliberately do not deploy together — and unittest updates should be a conscious choice.
 
-To monitor: the workflow run in the GitHub Actions tab. Downtime per service is brief (extract +
-restart), during which the dashboard and the library part of the website are down or stale.
+To monitor: the workflow run in the GitHub Actions tab. Downtime during a deploy is the
+extract + restart window, during which the dashboard and the library part of the website are
+down or stale.
 
 #### troubleshooting a failed deployment (legacy Deployment Center sync only)
 

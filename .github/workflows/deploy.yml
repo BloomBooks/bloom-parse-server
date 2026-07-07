@@ -8,10 +8,14 @@
 # deployment") is eliminated.
 #
 # Deploy targets:
-#   push to develop            -> bloom-parse-server-unittest AND bloom-parse-server-develop
+#   push to develop            -> bloom-parse-server-develop
 #   push to master             -> bloom-parse-server-production, "staging" slot
 #                                 (the manual portal Swap remains the go-live step)
 #   manual run (Actions tab)   -> whichever single service you pick
+#
+# unittest deploys ONLY via manual run: the two develop-branch services share slow
+# hardware, so deploying both on every push would compound the slowdown, and unittest
+# updates should be deliberate anyway.
 #
 # Required repository secrets (publish profile XML, downloaded per service in the
 # Azure portal via "Download publish profile"):
@@ -86,8 +90,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'unittest')
+      github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'unittest'
     steps:
       - uses: actions/download-artifact@v4
         with:
