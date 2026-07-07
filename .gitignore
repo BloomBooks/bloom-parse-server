@@ -34,4 +34,7 @@ node_modules
 .eslintcache
 
 
+# Schema exports, generated definitions, and security notes deliberately stay out of
+# source control: they describe our live permission setup in detail.
 schema/*.json
+schema/*.md

@@ -130,6 +130,9 @@ describe("booting with generated definitions (end to end)", () => {
                     `${def.className}.${fieldName} should exist`
                 ).toMatchObject(def.fields[fieldName]);
             }
+            // Security win: defined schemas force addField to {} on every managed class,
+            // closing the "any client can add columns" hole regardless of what the export had.
+            expect(cloud.classLevelPermissions.addField).toEqual({});
         }
 
         // The cloud code works against the migrated schema: create a book through the
