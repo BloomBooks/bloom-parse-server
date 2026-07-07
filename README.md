@@ -107,7 +107,13 @@ Requirements for the pipeline (one-time setup):
   connected, Kudu keeps a "deployment branch" setting that makes every zip deploy fail with
   `ChangeSetId(develop) does not match ...` — and it would double-deploy on each push besides.
 - `iisnode.yml` (in the repo) pins the node.exe the app runs under; keep it in sync with the
-  `WEBSITE_NODE_DEFAULT_VERSION` app setting when upgrading Node.
+  `WEBSITE_NODE_DEFAULT_VERSION` app setting when upgrading Node. Notes on this file:
+  - It is deliberately minimal and comment-free: iisnode's parser is line-based (not real
+    YAML), and Kudu's generated format — double quotes, backslashes — is the known-good shape.
+    YAML linters flag the backslashes as invalid escapes; ignore them and don't "fix" the quoting.
+  - `loggingEnabled: false` because with `WEBSITE_RUN_FROM_PACKAGE` the app folder is read-only
+    and iisnode cannot write its stdout/stderr logs there (that failure 500s every request).
+    parse-server's own logs (see `PARSE_SERVER_LOGS_FOLDER`) are the useful ones and still work.
 - App settings on every service (and the production staging slot):
   - `WEBSITE_RUN_FROM_PACKAGE` = `1` — the app runs directly from a read-only mount of the
     deployed zip. No extraction into wwwroot (extraction is slow and has failed outright on

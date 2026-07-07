@@ -1,19 +1,2 @@
-# Pins which node.exe iisnode launches for this app.
-#
-# NOTE: YAML linters flag the backslash paths below as invalid escape sequences. That is
-# fine: iisnode's parser is line-based (not real YAML), and this double-quoted-backslash
-# format is exactly what Kudu generates. Don't "fix" the quoting.
-#
-# When deployments were built on the App Service by Kudu ("App Service Build Service"),
-# Kudu generated this file automatically from the node version it selected. Prebuilt
-# GitHub Actions deployments (.github/workflows/deploy.yml) don't generate it, so it
-# lives in the repo instead.
-#
-# KEEP IN SYNC with the WEBSITE_NODE_DEFAULT_VERSION app setting in Azure (and with the
-# node versions actually installed on the platform; see README "Azure Setup").
 nodeProcessCommandLine: "C:\Program Files (x86)\nodejs\22.22.2\node.exe"
-
-# With WEBSITE_RUN_FROM_PACKAGE=1 the app runs from a read-only mount of the deployed zip,
-# so iisnode cannot write its stdout/stderr logs to the default "iisnode" folder inside the
-# app directory. Send them to the persistent LogFiles share instead.
-logDirectory: "C:\home\LogFiles\iisnode"
+loggingEnabled: false
