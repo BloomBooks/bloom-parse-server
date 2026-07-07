@@ -106,6 +106,13 @@ Requirements for the pipeline (one-time setup):
   served by this pipeline, or every push deploys twice.
 - `iisnode.yml` (in the repo) pins the node.exe the app runs under; keep it in sync with the
   `WEBSITE_NODE_DEFAULT_VERSION` app setting when upgrading Node.
+- App settings on every service (and the production staging slot):
+  - `WEBSITE_RUN_FROM_PACKAGE` = `1` — the app runs directly from a read-only mount of the
+    deployed zip. No extraction into wwwroot (extraction is slow and has failed outright on
+    our small instances), and cutover is atomic.
+  - `PARSE_SERVER_LOGS_FOLDER` = `C:\home\LogFiles\parse-server` — with wwwroot read-only,
+    parse-server can't write its default `./logs` folder. (iisnode's own logs are similarly
+    redirected by `logDirectory` in iisnode.yml.)
 
 A one-off deploy of any single service can be run from the GitHub Actions tab
 ("build-and-deploy" → Run workflow → pick the target).
