@@ -32,6 +32,3 @@ node_modules
 *.orig
 
 .eslintcache
-
-
-schema/*.json

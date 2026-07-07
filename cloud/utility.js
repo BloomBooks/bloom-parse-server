@@ -1,15 +1,16 @@
 // This is just a little utility function used to set the langTag on the show field for epub and pdfs.
 // It is intended as a one-off run to fix up existing books. Starting July 2023, the harvester sets this
 // for every book it processes, using the actual contentLanguage1 in the dom.
+// eslint-disable-next-line no-undef
 Parse.Cloud.define("setArtifactLangTags", async (request) => {
     request.log.info("setArtifactLangTags - Starting.");
 
-    const dryRun =
-        request.params.dryrun === "true" || request.params.dryrun === true;
+    const dryRun = request.params.dryrun === "true" || request.params.dryrun === true;
     if (dryRun) {
         request.log.info("setArtifactLangTags - Dry run only.");
     }
 
+    // eslint-disable-next-line no-undef
     var query = new Parse.Query("books");
     // Query for all books whose most recent update wasn't to run this utility.
     query.notEqualTo("updateSource", "setArtifactLangTags");
@@ -51,7 +52,7 @@ Parse.Cloud.define("setArtifactLangTags", async (request) => {
         let allTitles;
         try {
             allTitles = JSON.parse(allTitlesJson);
-        } catch {
+        } catch (e) {
             request.log.error(
                 `setArtifactLangTags failed to parse allTitlesJson for book \`${book.id}\` with title \`${title}\` and allTitles \`${allTitlesJson}\`.`
             );

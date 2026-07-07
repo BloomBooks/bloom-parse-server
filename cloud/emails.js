@@ -71,49 +71,58 @@ exports.sendEmailAboutNewBookAsync = async (parseBook) => {
 // Any data beyond what can be determined from the book itself
 // should be passed via additionalJsonForTemplate.
 // parseBook should be a parse-server object (not just json).
-async function sendEmailAboutBookAsync(
+function sendEmailAboutBookAsync(
     dataForEmailClientJson,
     parseBook,
     additionalJsonForEmailTemplate
 ) {
-    // on the unit test server, we don't want to be sending emails, so we just don't set the needed environment variables.
-    if (!process.env.MAILGUN_API_KEY) {
-        console.log(
-            "MAILGUN_API_KEY environment variable not set, sendEmailAboutBookAsync() will just pretend it succeeded."
-        );
-        return "MAILGUN_API_KEY environment variable not set";
-    }
-    if (!dataForEmailClientJson.to) {
-        console.log(
-            "to email address not set, sendEmailAboutBookAsync() will just pretend it succeeded."
-        );
-        return "to email address variable not set (check environment variable)";
-    }
+    return new Promise(function (resolve, reject) {
+        try {
+            // on the unit test server, we don't want to be sending emails, so we just don't set the needed environment variables.
+            if (!process.env.MAILGUN_API_KEY) {
+                console.log(
+                    "MAILGUN_API_KEY environment variable not set, sendEmailAboutBookAsync() will just pretend it succeeded."
+                );
+                resolve("MAILGUN_API_KEY environment variable not set");
+            }
+            if (!dataForEmailClientJson.to) {
+                console.log(
+                    "to email address not set, sendEmailAboutBookAsync() will just pretend it succeeded."
+                );
+                resolve(
+                    "to email address variable not set (check environment variable)"
+                );
+            }
 
-    const bookJson = getTemplateDataFromBookAsJson(parseBook);
-    const templateJson = {
-        ...bookJson,
-        ...additionalJsonForEmailTemplate,
-    };
+            const bookJson = getTemplateDataFromBookAsJson(parseBook);
+            const templateJson = {
+                ...bookJson,
+                ...additionalJsonForEmailTemplate,
+            };
 
-    const data = {
-        "h:X-Mailgun-Variables": JSON.stringify(templateJson),
-    };
-    Object.assign(/*target=*/ data, /*source=*/ dataForEmailClientJson);
+            const data = {
+                "h:X-Mailgun-Variables": JSON.stringify(templateJson),
+            };
+            Object.assign(/*target=*/ data, /*source=*/ dataForEmailClientJson);
 
-    const Mailgun = require("mailgun.js");
-    // FormData is the Node built-in (available since Node 18).
-    const mg = new Mailgun(FormData).client({
-        username: "api",
-        key: process.env.MAILGUN_API_KEY,
-    });
-    // Deliberately NOT awaited: sending is fire-and-forget, as it was with the old mailgun-js
-    // code. One caller is the books afterSave hook, which parse-server awaits before answering
-    // the client, so awaiting here would add the Mailgun round-trip to every new-book upload.
-    // Send failures are logged but never fail the caller.
-    mg.messages.create("bloomlibrary.org", data).catch((error) => {
-        console.error("error sending mail:");
-        console.error(error);
+            const mailgun = require("mailgun-js");
+            const mg = mailgun({
+                apiKey: process.env.MAILGUN_API_KEY,
+                domain: "bloomlibrary.org",
+            });
+            mg.messages().send(data, function (error, body) {
+                if (error) {
+                    console.error("error:");
+                    console.error(error);
+                    console.error("body:");
+                    console.error(body);
+                }
+            });
+
+            resolve();
+        } catch (exception) {
+            reject(exception);
+        }
     });
 }
 
