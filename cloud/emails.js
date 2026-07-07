@@ -107,13 +107,14 @@ async function sendEmailAboutBookAsync(
         username: "api",
         key: process.env.MAILGUN_API_KEY,
     });
-    try {
-        await mg.messages.create("bloomlibrary.org", data);
-    } catch (error) {
-        // Like the old mailgun-js code, log send failures but don't fail the caller.
+    // Deliberately NOT awaited: sending is fire-and-forget, as it was with the old mailgun-js
+    // code. One caller is the books afterSave hook, which parse-server awaits before answering
+    // the client, so awaiting here would add the Mailgun round-trip to every new-book upload.
+    // Send failures are logged but never fail the caller.
+    mg.messages.create("bloomlibrary.org", data).catch((error) => {
         console.error("error sending mail:");
         console.error(error);
-    }
+    });
 }
 
 function getTemplateDataFromBookAsJson(bookJson) {
