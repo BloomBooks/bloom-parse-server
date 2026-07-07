@@ -77,25 +77,45 @@ const app = express();
 const mountPath = process.env.PARSE_MOUNT || "/parse";
 const server = new ParseServer(serverConfig);
 // For an unknown reason, when deployed on a real server, await server.start() causes the server to never successfully start.
-server.start().then(() => {
-    app.use(mountPath, server.app);
+server
+    .start()
+    .catch((error) => {
+        // Without this, a failed start is nearly silent: parse-server may try to report
+        // the failure through its own logger, which can itself be the broken piece
+        // (e.g. an unwritable logs folder), and the process just exits. Write to both
+        // stderr and, best-effort, the parse-server logs folder, then exit nonzero so
+        // the failure is unmistakable. (Cost us a debugging session on 2026-07-07.)
+        console.error("FATAL: parse-server failed to start:", error);
+        try {
+            const logsFolder = process.env.PARSE_SERVER_LOGS_FOLDER || "./logs";
+            require("fs").appendFileSync(
+                require("path").join(logsFolder, "startup-failure.log"),
+                new Date().toISOString() + " " + (error.stack || error) + "\n"
+            );
+        } catch {
+            // the logs folder itself may be the problem; stderr already has it
+        }
+        process.exit(1);
+    })
+    .then(() => {
+        app.use(mountPath, server.app);
 
-    // The main thing here is the google-site-verification meta tag.
-    // This lets us access the site on the Google Search Console.
-    app.get("/", function (req, res) {
-        res.status(200).send(
-            "<html>" +
-                '<head><meta name="google-site-verification" content="dm8VsqC5uw-fikoD-4ZxYbPfzV-qYyrPCJq7aIgvlJo" /></head>' +
-                '<body><a href="https://bloomlibrary.org">Bloom Library</a></body>' +
-                "</html>"
-        );
+        // The main thing here is the google-site-verification meta tag.
+        // This lets us access the site on the Google Search Console.
+        app.get("/", function (req, res) {
+            res.status(200).send(
+                "<html>" +
+                    '<head><meta name="google-site-verification" content="dm8VsqC5uw-fikoD-4ZxYbPfzV-qYyrPCJq7aIgvlJo" /></head>' +
+                    '<body><a href="https://bloomlibrary.org">Bloom Library</a></body>' +
+                    "</html>"
+            );
+        });
+
+        app.use("/dashboard", dashboard);
+
+        const port = process.env.PORT || 1337;
+        const httpServer = require("http").createServer(app);
+        httpServer.listen(port, function () {
+            console.log("bloom-parse-server running on port " + port + ".");
+        });
     });
-
-    app.use("/dashboard", dashboard);
-
-    const port = process.env.PORT || 1337;
-    const httpServer = require("http").createServer(app);
-    httpServer.listen(port, function () {
-        console.log("bloom-parse-server running on port " + port + ".");
-    });
-});
