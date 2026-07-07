@@ -1,4 +1,4 @@
-# Build-and-deploy pipeline (see UPGRADE-PLAN.md 12 and README "Deployment").
+﻿# Build-and-deploy pipeline (see UPGRADE-PLAN.md 12 and README "Deployment").
 #
 # The build (npm ci, patch-package, lint, packaging) runs on a GitHub-hosted Windows
 # runner instead of on the App Service itself, then the prebuilt app (node_modules
@@ -95,7 +95,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: app
-      - uses: azure/webapps-deploy@v3
+      - uses: azure/webapps-deploy@v2
         with:
           app-name: bloom-parse-server-unittest
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_UNITTEST }}
@@ -111,7 +111,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: app
-      - uses: azure/webapps-deploy@v3
+      - uses: azure/webapps-deploy@v2
         with:
           app-name: bloom-parse-server-develop
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEVELOP }}
@@ -127,7 +127,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: app
-      - uses: azure/webapps-deploy@v3
+      - uses: azure/webapps-deploy@v2
         with:
           app-name: bloom-parse-server-production
           slot-name: staging
