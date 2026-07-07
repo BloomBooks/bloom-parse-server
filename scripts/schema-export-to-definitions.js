@@ -3,7 +3,14 @@
 // the supported replacement for the setupTables cloud function. See UPGRADE-PLAN.md 10.
 //
 // Usage:
-//   node scripts/schema-export-to-definitions.js schema/prod.json schema/definitions.json
+//   node scripts/schema-export-to-definitions.js schema/prod.json schema/definitions.json [clp-overrides.json]
+//
+// The optional third argument is a CLP-overrides file (gitignored, like everything under
+// schema/): { "<className>": { "<operation>": <permissions object>, ... }, ... }.
+// Each listed operation REPLACES the exported one; unlisted operations pass through
+// unchanged. Use it to harden permissions relative to what the live export contains, so
+// the hardened values are re-applied at every boot instead of drifting in the dashboard.
+// A class named in the overrides but missing from the export is an error (catches typos).
 //
 // Deliberate policy choices (see UPGRADE-PLAN.md for the reasoning):
 //
@@ -30,12 +37,21 @@ const CLASS_DEFAULT_FIELDS = {
 
 const EXCLUDED_CLASSES = ["_Session"];
 
-function convertExportToDefinitions(exportJson) {
+function convertExportToDefinitions(exportJson, clpOverrides = {}) {
     const classes = exportJson.results || exportJson;
     if (!Array.isArray(classes)) {
         throw new Error(
             "Expected a schema export: { results: [ { className, ... } ] }"
         );
+    }
+    const classNames = classes.map((c) => c.className);
+    for (const overrideClass of Object.keys(clpOverrides)) {
+        if (!classNames.includes(overrideClass)) {
+            throw new Error(
+                `CLP override for "${overrideClass}" matches no class in the export ` +
+                    "(typo, or the class was removed?)"
+            );
+        }
     }
     return classes
         .filter((c) => !EXCLUDED_CLASSES.includes(c.className))
@@ -54,7 +70,10 @@ function convertExportToDefinitions(exportJson) {
             return {
                 className: c.className,
                 fields,
-                classLevelPermissions: c.classLevelPermissions,
+                classLevelPermissions: {
+                    ...c.classLevelPermissions,
+                    ...(clpOverrides[c.className] || {}),
+                },
                 // no "indexes" on purpose; see header comment
             };
         });
@@ -63,19 +82,25 @@ function convertExportToDefinitions(exportJson) {
 module.exports = { convertExportToDefinitions };
 
 if (require.main === module) {
-    const [inputPath, outputPath] = process.argv.slice(2);
+    const [inputPath, outputPath, overridesPath] = process.argv.slice(2);
     if (!inputPath || !outputPath) {
         console.error(
-            "usage: node scripts/schema-export-to-definitions.js <schema-export.json> <definitions.json>"
+            "usage: node scripts/schema-export-to-definitions.js <schema-export.json> <definitions.json> [clp-overrides.json]"
         );
         process.exit(1);
     }
     const exportJson = JSON.parse(fs.readFileSync(inputPath, "utf8"));
-    const definitions = convertExportToDefinitions(exportJson);
+    const clpOverrides = overridesPath
+        ? JSON.parse(fs.readFileSync(overridesPath, "utf8"))
+        : {};
+    const definitions = convertExportToDefinitions(exportJson, clpOverrides);
     fs.writeFileSync(outputPath, JSON.stringify(definitions, null, 2) + "\n");
+    const overrideNote = overridesPath
+        ? ` with CLP overrides for ${Object.keys(clpOverrides).join(", ")}`
+        : "";
     console.log(
         `Wrote ${definitions.length} class definitions (${definitions
             .map((d) => d.className)
-            .join(", ")}) to ${outputPath}`
+            .join(", ")}) to ${outputPath}${overrideNote}`
     );
 }

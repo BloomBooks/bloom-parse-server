@@ -77,6 +77,28 @@ describe("convertExportToDefinitions", () => {
         expect(books.classLevelPermissions).toEqual({ find: { "*": true } });
         expect(books.indexes).toBeUndefined();
     });
+
+    it("applies CLP overrides per operation, leaving other operations untouched", () => {
+        const defs = convertExportToDefinitions(sampleExport, {
+            _User: { update: { "role:admin": true } },
+        });
+        const user = defs.find((d) => d.className === "_User");
+        expect(user.classLevelPermissions.update).toEqual({
+            "role:admin": true,
+        });
+        expect(user.classLevelPermissions.find).toEqual({ "*": true }); // untouched
+        // Classes without overrides pass through verbatim
+        const books = defs.find((d) => d.className === "books");
+        expect(books.classLevelPermissions).toEqual({ find: { "*": true } });
+    });
+
+    it("rejects overrides naming a class that is not in the export", () => {
+        expect(() =>
+            convertExportToDefinitions(sampleExport, {
+                notARealClass: { find: {} },
+            })
+        ).toThrow(/matches no class/);
+    });
 });
 
 describe("booting with generated definitions (end to end)", () => {
