@@ -104,6 +104,28 @@ To monitor a deployment: Azure portal (portal.azure.com; access granted by LTOps
 service → Deployment Center → check the status column. Deployment and restart can take several
 minutes, during which the service (dashboard and the library part of the website) is down or stale.
 
+#### troubleshooting a failed deployment
+
+The build runs `npm install` **on the app service itself**, which is slow and can be killed
+mid-install (Kudu aborts any build step that produces no output for 60 seconds; the app setting
+`SCM_COMMAND_IDLE_TIMEOUT` = `1800` raises that and should be set on every service).
+
+An interrupted install can leave `node_modules` corrupted in a way `npm install` will NOT
+self-heal: a package directory whose `package.json` survives but whose files are gone (a "husk").
+Symptom: the app (or the `patch-package` postinstall during the next deploy) crashes with
+`Cannot find module '...'` or `Please verify that the package.json has a valid "main" entry`,
+even though the package's folder exists, and redeploying doesn't fix it. This happened 2026-07-07
+(`isarray` husk broke every subsequent deploy).
+
+Recovery:
+
+1. Kudu console (`https://<app-service>.scm.azurewebsites.net` → Debug console → CMD):
+   `cd C:\home\site\wwwroot` then `move node_modules node_modules.broken`
+   (renaming is instant; deleting takes ages on these instances).
+2. Deployment Center → Sync, and watch the log. The install truly completed only if you see
+   the postinstall line `Applying patches... parse-server+<version>.patch ✔`.
+3. Verify the site works, then delete `node_modules.broken` whenever convenient.
+
 #### master branch
 
 Production uses a staging slot with a manual swap. Once changes have been merged to the
