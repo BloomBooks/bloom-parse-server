@@ -26,9 +26,6 @@ on:
     branches:
       - develop
       - master
-      # TODO: remove this branch trigger once the pipeline is validated. It exists so
-      # the unittest service can be deployed from this branch before cutover.
-      - gha-deploy
   workflow_dispatch:
     inputs:
       target:
@@ -89,7 +86,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: >-
-      (github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/gha-deploy')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'unittest')
     steps:
       - uses: actions/download-artifact@v4

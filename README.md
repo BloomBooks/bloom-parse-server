@@ -136,9 +136,12 @@ staging slot for these services; both go live as soon as their deploy job finish
 To monitor: the workflow run in the GitHub Actions tab. Downtime per service is brief (extract +
 restart), during which the dashboard and the library part of the website are down or stale.
 
-#### troubleshooting a failed deployment
+#### troubleshooting a failed deployment (legacy Deployment Center sync only)
 
-The build runs `npm install` **on the app service itself**, which is slow and can be killed
+This section applies only to services still deployed by the legacy Deployment Center git sync
+(production, until its cutover) — the GitHub Actions pipeline never runs npm on the app service.
+
+The legacy build runs `npm install` **on the app service itself**, which is slow and can be killed
 mid-install (Kudu aborts any build step that produces no output for 60 seconds; the app setting
 `SCM_COMMAND_IDLE_TIMEOUT` = `1800` raises that and should be set on every service).
 
