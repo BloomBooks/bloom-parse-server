@@ -1,27 +1,28 @@
 diff --git a/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js b/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
-index 6ca8eb4..b79995e 100644
+index d4a7e56..0bce5ad 100644
 --- a/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
 +++ b/node_modules/parse-server/lib/Adapters/Storage/Mongo/MongoStorageAdapter.js
-@@ -808,6 +808,13 @@ class MongoStorageAdapter {
+@@ -901,6 +901,14 @@ class MongoStorageAdapter {
      return Promise.resolve();
    }
    createTextIndexesIfNeeded(className, query, schema) {
 +    // For some unknown reason, this code started failing in early 2024 (probably the upgrade to parse-server 7).
 +    // It attempts to create the "search_text" index, but it fails because the index already exists.
-+    // We can't see any way in which the relevant code has changed, and our index definition hasn't changed in years.
-+    // Specifically, it seems to expect that our "search_text" index includes the "search" field,
-+    // but is hasn't for years.
-+    // Anyway, we don't need it to create the index, so we just skip this code as a hack.
++    // Root cause (understood 2026, see UPGRADE-PLAN.md 5.3): our actual search_text Mongo index does not
++    // include the "search" field in its weights, so the _SCHEMA metadata entry has no "search" key;
++    // the guard below falls through and setIndexesWithSchemaFormat throws
++    // "Index search_text exists, cannot update." (Parse error 102; only raw Mongo code 85 is caught).
++    // We don't need it to create the index, so we skip this code as a hack.
 +    return Promise.resolve();
      for (const fieldName in query) {
        if (!query[fieldName] || !query[fieldName].$text) {
          continue;
 diff --git a/node_modules/parse-server/lib/RestQuery.js b/node_modules/parse-server/lib/RestQuery.js
-index 1155c10..ab368d0 100644
+index 6ac0aa8..f1e2baf 100644
 --- a/node_modules/parse-server/lib/RestQuery.js
 +++ b/node_modules/parse-server/lib/RestQuery.js
-@@ -242,8 +242,8 @@ _UnsafeRestQuery.prototype.execute = function (executeOptions) {
-   return Promise.resolve().then(() => {
+@@ -246,8 +246,8 @@ _UnsafeRestQuery.prototype.execute = function (executeOptions) {
+   }).then(() => {
      return this.buildRestWhere();
    }).then(() => {
 -    return this.denyProtectedFields();
@@ -30,18 +31,4 @@ index 1155c10..ab368d0 100644
 +//   }).then(() => {
      return this.handleIncludeAll();
    }).then(() => {
-     return this.handleExcludeKeys();
-diff --git a/node_modules/parse-server/lib/middlewares.js b/node_modules/parse-server/lib/middlewares.js
-index d488ac0..2d5339d 100644
---- a/node_modules/parse-server/lib/middlewares.js
-+++ b/node_modules/parse-server/lib/middlewares.js
-@@ -59,6 +59,9 @@ const getBlockList = (ipRangeList, store) => {
-   return blockList;
- };
- const checkIp = (ip, ipRangeList, store) => {
-+
-+  if (ipRangeList.includes("0.0.0.0/0") && ipRangeList.includes("::0")) return true;
-+
-   const incomingIpIsV4 = (0, _net.isIPv4)(ip);
-   const blockList = getBlockList(ipRangeList, store);
-   if (store.get(ip)) return true;
+     return this.validateIncludeComplexity();

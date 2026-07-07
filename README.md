@@ -6,7 +6,7 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
 ### Set Up For Local Development
 
-1. Make sure you have Node 16.13.
+1. Make sure you have Node 22 (or 24; see the engines field in package.json).
 
    `node --version`
 
@@ -14,7 +14,7 @@ Here is the full [Parse Server guide](http://docs.parseplatform.org/parse-server
 
    `npm install`
 
-1. Install mongodb server
+1. Install mongodb server (version 8.0.x, to match the live clusters)
 
 1. Give mongodb a blank directory to work with (create it first if it doesn't exist), and run it:
 
@@ -93,32 +93,33 @@ Notes below on Azure Setup are relevant to deployment, but I wanted to separate 
 
 #### develop branch
 
-Once changes have been pushed to the `develop` branch,
+Changes pushed to the `develop` branch are deployed automatically — there is no staging slot for
+these services. Both of the following redeploy directly when GitHub notifies them of a commit on
+`develop`:
 
-1. Go to the Azure portal (portal.azure.com). Access must be granted by LTOps.
-2. Open the bloom-parse-server-develop app service.
-3. Open Deployment slots.
-   - Note that steps 2 and 3 can be skipped by opening the staging app service directly.
-4. Open bloom-parse-server-develop-staging.
-5. Open "Deployment Center" for the staging app service.
-6. Wait until your changes have been successfully deployed (check the status column).
-7. Repeat steps 2 and 3.
-8. Click Swap.
-9. Review settings changes to make sure no app service settings are getting changed accidentally.
-10. Click Swap.
-11. Deployment and restart of the service can take several minutes.
-    - During this time, the dashboard and library part of the website will be down.
+- bloom-parse-server-unittest
+- bloom-parse-server-develop
 
-Note that changes in the `develop` branch will be automatically deployed to the unittest instance.
+To monitor a deployment: Azure portal (portal.azure.com; access granted by LTOps) → the app
+service → Deployment Center → check the status column. Deployment and restart can take several
+minutes, during which the service (dashboard and the library part of the website) is down or stale.
 
 #### master branch
 
-Once changes have been merged to the `master` branch,
+Production uses a staging slot with a manual swap. Once changes have been merged to the
+`master` branch,
 
-1. Follow the same steps as develop except the app service names are
-
-   - bloom-parse-server-production
-   - bloom-parse-server-production-staging
+1. Go to the Azure portal (portal.azure.com). Access must be granted by LTOps.
+2. Open the bloom-parse-server-production app service.
+3. Open Deployment slots.
+   - Note that steps 2 and 3 can be skipped by opening bloom-parse-server-production-staging directly.
+4. Open "Deployment Center" for the staging app service.
+5. Wait until your changes have been successfully deployed (check the status column).
+6. Back in bloom-parse-server-production, click Swap.
+7. Review settings changes to make sure no app service settings are getting changed accidentally.
+8. Click Swap.
+9. Deployment and restart of the service can take several minutes.
+   - During this time, the dashboard and library part of the website will be down.
 
 #### modifying the schema
 
@@ -172,11 +173,24 @@ Each is backed by a single mongodb at mongodb.com. This is how they were made:
 
      - probably obsolete now that we don't use the built-in email feature; currently the same as SERVER_URL
 
-4. In the App Service's Deployment settings, add a slot for staging and point that staging app service at this github repository,
-   with the appropriate branch. A few minutes later, parse-server will be running on the staging app service.
+   - PARSE_SERVER_MASTER_KEY_IPS
+
+     - "0.0.0.0/0,::/0" to allow master-key use from anywhere.
+     - Note: it must be `::/0`, not `::0`; parse-server does not recognize `::0` as allow-all
+       (see UPGRADE-PLAN.md 5.1 — this once broke master-key access entirely).
+
+   - WEBSITE_NODE_DEFAULT_VERSION
+
+     - the Node version the app service runs (22.22.2 as of July 2026).
+     - Not marked as a deployment-slot setting, so it travels with a slot swap.
+
+4. In the App Service's Deployment Center, point the app service at this github repository with the
+   appropriate branch. A few minutes later, parse-server will be running.
    Note that Azure apparently does the `npm install` automatically, as needed.
-   The staging app service automatically redeploys when github notifies it of a check in on the branch it is watching.
-   The staging app service can then be swapped out with the live one.
+   The app service automatically redeploys when github notifies it of a check-in on the branch it
+   is watching.
+   For production only, do this on a staging slot instead (bloom-parse-server-production-staging),
+   which is then swapped with the live one. unittest and develop deploy directly with no slot.
    See the deployment section above for detailed steps.
 
 5. We never touch the schema using the Parse Dashboard or letting queries automagically add classes or fields.
