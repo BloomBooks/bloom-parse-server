@@ -91,35 +91,47 @@ curl -X POST \
 
 Notes below on Azure Setup are relevant to deployment, but I wanted to separate out the exact steps a developer would go through to deploy changes.
 
+Deployments are built by GitHub Actions (`.github/workflows/deploy.yml`): the workflow runs
+`npm ci` + lint on a Windows runner, packages the app **with node_modules included**, and pushes
+the prebuilt zip to the app service. The app service never runs npm, so deploy downtime is only
+the zip-extract + iisnode restart, and there is no on-box install to fail or corrupt.
+
+Requirements for the pipeline (one-time setup):
+
+- Repository secrets holding each service's publish profile (portal → app service →
+  "Download publish profile"): `AZURE_WEBAPP_PUBLISH_PROFILE_UNITTEST`,
+  `AZURE_WEBAPP_PUBLISH_PROFILE_DEVELOP`, and `AZURE_WEBAPP_PUBLISH_PROFILE_PRODUCTION_STAGING`
+  (that last one is the **staging slot's** profile, not the production app's).
+- The old Deployment Center GitHub sync must be **disconnected** on each service once it is
+  served by this pipeline, or every push deploys twice.
+- `iisnode.yml` (in the repo) pins the node.exe the app runs under; keep it in sync with the
+  `WEBSITE_NODE_DEFAULT_VERSION` app setting when upgrading Node.
+
+A one-off deploy of any single service can be run from the GitHub Actions tab
+("build-and-deploy" → Run workflow → pick the target).
+
 #### develop branch
 
-Changes pushed to the `develop` branch are deployed automatically — there is no staging slot for
-these services. Both of the following redeploy directly when GitHub notifies them of a commit on
-`develop`:
+Changes pushed to the `develop` branch are deployed automatically by the workflow — there is no
+staging slot for these services; both go live as soon as their deploy job finishes:
 
 - bloom-parse-server-unittest
 - bloom-parse-server-develop
 
-To monitor a deployment: Azure portal (portal.azure.com; access granted by LTOps) → the app
-service → Deployment Center → check the status column. Deployment and restart can take several
-minutes, during which the service (dashboard and the library part of the website) is down or stale.
+To monitor: the workflow run in the GitHub Actions tab. Downtime per service is brief (extract +
+restart), during which the dashboard and the library part of the website are down or stale.
 
 #### master branch
 
 Production uses a staging slot with a manual swap. Once changes have been merged to the
-`master` branch,
+`master` branch, the workflow deploys them to the staging slot; then:
 
 1. Go to the Azure portal (portal.azure.com). Access must be granted by LTOps.
-2. Open the bloom-parse-server-production app service.
-3. Open Deployment slots.
-   - Note that steps 2 and 3 can be skipped by opening bloom-parse-server-production-staging directly.
-4. Open "Deployment Center" for the staging app service.
-5. Wait until your changes have been successfully deployed (check the status column).
-6. Back in bloom-parse-server-production, click Swap.
-7. Review settings changes to make sure no app service settings are getting changed accidentally.
-8. Click Swap.
-9. Deployment and restart of the service can take several minutes.
-   - During this time, the dashboard and library part of the website will be down.
+2. Wait for the "build-and-deploy" workflow run on `master` to finish (GitHub Actions tab).
+3. Open the bloom-parse-server-production app service and click Swap.
+4. Review settings changes to make sure no app service settings are getting changed accidentally.
+5. Click Swap.
+6. The swap takes a couple of minutes; the site stays up (that is the point of the slot).
 
 #### modifying the schema
 
@@ -184,14 +196,13 @@ Each is backed by a single mongodb at mongodb.com. This is how they were made:
      - the Node version the app service runs (22.22.2 as of July 2026).
      - Not marked as a deployment-slot setting, so it travels with a slot swap.
 
-4. In the App Service's Deployment Center, point the app service at this github repository with the
-   appropriate branch. A few minutes later, parse-server will be running.
-   Note that Azure apparently does the `npm install` automatically, as needed.
-   The app service automatically redeploys when github notifies it of a check-in on the branch it
-   is watching.
-   For production only, do this on a staging slot instead (bloom-parse-server-production-staging),
-   which is then swapped with the live one. unittest and develop deploy directly with no slot.
-   See the deployment section above for detailed steps.
+4. Deployments come from the GitHub Actions workflow (see the Deployment section above): download
+   the service's publish profile, add it as the corresponding repository secret, and add the
+   service to `.github/workflows/deploy.yml`. Do NOT connect the App Service's Deployment Center
+   to the repository — that legacy path builds on the app service itself and conflicts with the
+   workflow. For production only, the workflow targets a staging slot
+   (bloom-parse-server-production-staging), which is then swapped with the live one; unittest and
+   develop deploy directly with no slot.
 
 5. We never touch the schema using the Parse Dashboard or letting queries automagically add classes or fields.
    Instead, we set up the schema using a Cloud Code function `setupTables`.

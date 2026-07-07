@@ -1,0 +1,135 @@
+# Build-and-deploy pipeline (see UPGRADE-PLAN.md 12 and README "Deployment").
+#
+# The build (npm ci, patch-package, lint, packaging) runs on a GitHub-hosted Windows
+# runner instead of on the App Service itself, then the prebuilt app (node_modules
+# included) is pushed as a zip. The app service never runs npm: deploys shrink from
+# many minutes of downtime to roughly a zip-extract + iisnode restart, and the
+# interrupted-install corruption failure mode (README "troubleshooting a failed
+# deployment") is eliminated.
+#
+# Deploy targets:
+#   push to develop            -> bloom-parse-server-unittest AND bloom-parse-server-develop
+#   push to master             -> bloom-parse-server-production, "staging" slot
+#                                 (the manual portal Swap remains the go-live step)
+#   manual run (Actions tab)   -> whichever single service you pick
+#
+# Required repository secrets (publish profile XML, downloaded per service in the
+# Azure portal via "Download publish profile"):
+#   AZURE_WEBAPP_PUBLISH_PROFILE_UNITTEST
+#   AZURE_WEBAPP_PUBLISH_PROFILE_DEVELOP
+#   AZURE_WEBAPP_PUBLISH_PROFILE_PRODUCTION_STAGING   <- the STAGING SLOT's profile,
+#                                                        not the production app's
+name: build-and-deploy
+
+on:
+  push:
+    branches:
+      - develop
+      - master
+      # TODO: remove this branch trigger once the pipeline is validated. It exists so
+      # the unittest service can be deployed from this branch before cutover.
+      - gha-deploy
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deploy to which service
+        type: choice
+        required: true
+        options:
+          - unittest
+          - develop
+          - production-staging
+
+# One deploy at a time per branch; later pushes queue rather than race.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # windows-latest so node_modules is built on the same platform the app runs on.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies (postinstall applies the parse-server patches)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # TODO: enable once the vitest harness (test-harness-and-defined-schemas branch)
+      # has been merged.
+      # - name: Test
+      #   run: npm test
+
+      - name: Remove dev dependencies
+        run: npm prune --omit=dev
+
+      - name: Package app
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory package_root | Out-Null
+          Copy-Item index.js, web.config, iisnode.yml, package.json, bloomFirebaseAuthAdapter.js, httpsRequest.js package_root
+          Copy-Item -Recurse cloud package_root\cloud
+          Copy-Item -Recurse node_modules package_root\node_modules
+          7z a app.zip .\package_root\* | Out-Null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app.zip
+
+  deploy-unittest:
+    needs: build
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/gha-deploy')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'unittest')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: bloom-parse-server-unittest
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_UNITTEST }}
+          package: app.zip
+
+  deploy-develop:
+    needs: build
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'develop')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: bloom-parse-server-develop
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_DEVELOP }}
+          package: app.zip
+
+  deploy-production-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production-staging')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: bloom-parse-server-production
+          slot-name: staging
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_PRODUCTION_STAGING }}
+          package: app.zip

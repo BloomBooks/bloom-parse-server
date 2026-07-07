@@ -1,0 +1,10 @@
+# Pins which node.exe iisnode launches for this app.
+#
+# When deployments were built on the App Service by Kudu ("App Service Build Service"),
+# Kudu generated this file automatically from the node version it selected. Prebuilt
+# GitHub Actions deployments (.github/workflows/deploy.yml) don't generate it, so it
+# lives in the repo instead.
+#
+# KEEP IN SYNC with the WEBSITE_NODE_DEFAULT_VERSION app setting in Azure (and with the
+# node versions actually installed on the platform; see README "Azure Setup").
+nodeProcessCommandLine: "C:\Program Files (x86)\nodejs\22.22.2\node.exe"
