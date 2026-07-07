@@ -10,6 +10,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "test": "vitest run",
     "smoke": "node scripts/smoke-server.js",
     "lint": "eslint --cache ./cloud && eslint --cache index.js",
     "postinstall": "patch-package"
@@ -28,7 +29,8 @@
     "eslint": "10.6.0",
     "globals": "^17.7.0",
     "mongodb-memory-server": "^11.2.0",
-    "prettier": "3.9.4"
+    "prettier": "3.9.4",
+    "vitest": "^4.1.10"
   },
   "// overrides: parse-server 8.x pins @parse/push-adapter 6.x, whose @parse/node-gcm dep": " ",
   "// drags in critically-vulnerable request/form-data, and whose node-apn uses vulnerable": " ",
