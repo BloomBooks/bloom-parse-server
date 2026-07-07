@@ -102,8 +102,10 @@ Requirements for the pipeline (one-time setup):
   "Download publish profile"): `AZURE_WEBAPP_PUBLISH_PROFILE_UNITTEST`,
   `AZURE_WEBAPP_PUBLISH_PROFILE_DEVELOP`, and `AZURE_WEBAPP_PUBLISH_PROFILE_PRODUCTION_STAGING`
   (that last one is the **staging slot's** profile, not the production app's).
-- The old Deployment Center GitHub sync must be **disconnected** on each service once it is
-  served by this pipeline, or every push deploys twice.
+- The old Deployment Center GitHub sync must be **disconnected on each service BEFORE its first
+  pipeline deploy** (portal → app service → Deployment Center → Disconnect). While it is
+  connected, Kudu keeps a "deployment branch" setting that makes every zip deploy fail with
+  `ChangeSetId(develop) does not match ...` — and it would double-deploy on each push besides.
 - `iisnode.yml` (in the repo) pins the node.exe the app runs under; keep it in sync with the
   `WEBSITE_NODE_DEFAULT_VERSION` app setting when upgrading Node.
 - App settings on every service (and the production staging slot):
